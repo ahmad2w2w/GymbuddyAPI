@@ -2,35 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Chat bubble animations */
-@keyframes fadeIn {
+/* Modern Chat Animations */
+@keyframes fadeInMessage {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(20px) scale(0.95);
+    filter: blur(2px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+    filter: blur(0);
   }
 }
 
-@keyframes messageSlide {
+@keyframes slideInLeft {
   from {
     opacity: 0;
-    transform: translateX(20px) scale(0.9);
+    transform: translateX(-30px);
   }
   to {
     opacity: 1;
-    transform: translateX(0) scale(1);
+    transform: translateX(0);
   }
 }
 
-.animate-fadeIn {
-  animation: fadeIn 0.3s ease-out;
+@keyframes bubblePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(20px);
+  }
+  50% {
+    transform: scale(1.05) translateY(-5px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
-.animate-messageSlide {
-  animation: messageSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.6), 0 0 30px rgba(59, 130, 246, 0.4);
+  }
+}
+
+@keyframes messageDelivered {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes typingDots {
+  0%, 20% {
+    color: rgba(0, 0, 0, 0.2);
+    transform: scale(0.8);
+  }
+  50% {
+    color: rgba(0, 0, 0, 0.8);
+    transform: scale(1.2);
+  }
+  100% {
+    color: rgba(0, 0, 0, 0.2);
+    transform: scale(0.8);
+  }
+}
+
+/* Animation classes */
+.animate-fadeInMessage {
+  animation: fadeInMessage 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.4s ease-out;
+}
+
+.animate-bubblePop {
+  animation: bubblePop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.animate-pulseGlow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.animate-messageDelivered {
+  animation: messageDelivered 0.3s ease-in-out;
+}
+
+.animate-typingDots {
+  animation: typingDots 1.4s infinite ease-in-out;
+}
+
+.animate-typingDots:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.animate-typingDots:nth-child(3) {
+  animation-delay: 0.4s;
 }
 
 :root {
