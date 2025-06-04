@@ -177,9 +177,9 @@ export default function ChatPage() {
   const otherUser = invitation?.fromUserId === currentUser.id ? invitation?.toUser : invitation?.fromUser;
 
   return (
-    <div className="min-h-screen bg-fitness-light flex flex-col">
+    <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+      <header className="bg-white border-b border-gray-300 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center space-x-3">
           <Button variant="ghost" size="sm" onClick={goBack}>
             <ArrowLeft className="w-5 h-5" />
@@ -249,13 +249,13 @@ export default function ChatPage() {
       )}
 
       {/* Chat Messages */}
-      <div className="flex-1 px-4 py-4 space-y-4 overflow-y-auto">
+      <div className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {chats.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Send className="w-8 h-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-semibold text-fitness-dark mb-2">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Start het gesprek
             </h3>
             <p className="text-gray-600">
@@ -266,74 +266,93 @@ export default function ChatPage() {
           chats.map((chat: Chat) => (
             <div
               key={chat.id}
-              className={`flex ${chat.senderId === currentUser.id ? "justify-end" : "justify-start"}`}
+              className={`flex items-end gap-2 mb-1 ${chat.senderId === currentUser.id ? "justify-end" : "justify-start"}`}
             >
+              {chat.senderId !== currentUser.id && (
+                <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center mb-1">
+                  <span className="text-white text-sm font-medium">
+                    {otherUser?.name?.charAt(0) || "U"}
+                  </span>
+                </div>
+              )}
+              
               <div
-                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                className={`max-w-[280px] px-3 py-2 rounded-lg shadow-sm ${
                   chat.senderId === currentUser.id
-                    ? "bg-fitness-blue text-white"
-                    : "bg-white text-fitness-dark border border-gray-200"
+                    ? "bg-blue-500 text-white rounded-br-md"
+                    : "bg-white text-gray-900 rounded-bl-md border border-gray-100"
                 }`}
               >
-                <p>{chat.message}</p>
-                <p className={`text-xs mt-1 ${
+                <p className="text-sm leading-relaxed break-words">{chat.message}</p>
+                <div className={`text-xs mt-1 ${
                   chat.senderId === currentUser.id ? "text-blue-100" : "text-gray-500"
                 }`}>
                   {formatTime(new Date(chat.sentAt || Date.now()))}
-                </p>
+                </div>
               </div>
+              
+              {chat.senderId === currentUser.id && (
+                <div className="w-8 h-8 flex-shrink-0" />
+              )}
             </div>
           ))
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-gray-50 px-4 py-2">
-        <div className="flex space-x-2 overflow-x-auto">
+      {/* Message Input */}
+      <div className="bg-white border-t border-gray-200 px-4 py-3">
+        {/* Quick reply suggestions */}
+        <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
           <Button 
             variant="outline" 
             size="sm" 
-            className="whitespace-nowrap"
-            onClick={() => setMessage("Wanneer wil je trainen?")}
+            className="rounded-full whitespace-nowrap bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs px-3 py-1"
+            onClick={() => setMessage("Wanneer trainen?")}
           >
             Wanneer trainen?
           </Button>
           <Button 
             variant="outline" 
             size="sm" 
-            className="whitespace-nowrap"
-            onClick={() => setMessage("Hoe lang duurt je workout meestal?")}
+            className="rounded-full whitespace-nowrap bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs px-3 py-1"
+            onClick={() => setMessage("Workout duur?")}
           >
             Workout duur?
           </Button>
           <Button 
             variant="outline" 
             size="sm" 
-            className="whitespace-nowrap"
-            onClick={() => setMessage("Wat is je ervaring niveau?")}
+            className="rounded-full whitespace-nowrap bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs px-3 py-1"
+            onClick={() => setMessage("Ervaring?")}
           >
             Ervaring?
           </Button>
         </div>
-      </div>
 
-      {/* Message Input */}
-      <div className="bg-white border-t border-gray-200 px-4 py-3">
-        <div className="flex items-center space-x-2">
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type een bericht..."
-            className="flex-1"
-            onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-          />
-          <Button 
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <Input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Typ een bericht..."
+              className="rounded-full border border-gray-300 bg-gray-50 px-4 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:bg-white"
+              onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+              disabled={sendMessageMutation.isPending}
+            />
+          </div>
+          
+          <Button
             onClick={handleSendMessage}
             disabled={!message.trim() || sendMessageMutation.isPending}
-            className="bg-fitness-blue hover:bg-blue-600"
+            size="sm"
+            className="rounded-full w-10 h-10 p-0 bg-blue-500 hover:bg-blue-600"
           >
-            <Send className="w-4 h-4" />
+            {sendMessageMutation.isPending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
           </Button>
         </div>
       </div>
