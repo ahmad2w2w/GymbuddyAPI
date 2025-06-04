@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { MessageCircle, Calendar, MapPin, Star, Clock, Dumbbell } from "lucide-r
 import EnhancedBottomNavigation from "@/components/enhanced-bottom-navigation";
 import EnhancedHeader from "@/components/enhanced-header";
 import LoadingSkeleton from "@/components/loading-skeleton";
+import ModernChatInterface from "@/components/modern-chat-interface";
 import { Link } from "wouter";
 import { formatTime, formatDate, getWorkoutEmoji } from "@/lib/utils";
 import type { WorkoutInvitation, User } from "@shared/schema";
@@ -18,6 +20,7 @@ interface MatchWithUser extends WorkoutInvitation {
 
 export default function Matches() {
   const { user: authUser } = useAuth();
+  const [selectedMatch, setSelectedMatch] = useState<MatchWithUser | null>(null);
 
   const { data: invitationsData, isLoading } = useQuery({
     queryKey: ["/api/users", authUser?.id, "invitations"],
@@ -43,6 +46,16 @@ export default function Matches() {
       otherUser: inv.toUser
     }))
   ];
+
+  // Show chat interface if match is selected
+  if (selectedMatch) {
+    return (
+      <ModernChatInterface 
+        invitation={selectedMatch as any}
+        onBack={() => setSelectedMatch(null)}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
@@ -187,11 +200,14 @@ export default function Matches() {
                             Ready for {match.otherUser.workoutDuration} workout
                           </p>
                         </div>
-                        <Link href={`/chat/${match.id}`}>
-                          <Button size="sm" className="bg-fitness-green hover:bg-green-600">
-                            Chat Now
-                          </Button>
-                        </Link>
+                        <Button 
+                          size="sm" 
+                          onClick={() => setSelectedMatch(match)}
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+                        >
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          Chat Nu
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
