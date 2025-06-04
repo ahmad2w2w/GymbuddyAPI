@@ -287,6 +287,7 @@ export default function Home() {
       <Button
         size="lg"
         className="fixed bottom-24 right-4 w-14 h-14 bg-fitness-orange hover:bg-orange-600 rounded-full shadow-lg"
+        onClick={() => setShowLocationFilter(true)}
       >
         <Sliders className="w-5 h-5 text-white" />
       </Button>

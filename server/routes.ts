@@ -151,6 +151,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/invitations/:id/chats", async (req, res) => {
+    try {
+      const invitationId = parseInt(req.params.id);
+      const chatData = insertChatSchema.parse({
+        ...req.body,
+        invitationId
+      });
+      const chat = await storage.createChat(chatData);
+      res.status(201).json(chat);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid chat data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create chat message" });
+    }
+  });
+
+  app.get("/api/invitations/:id/chats", async (req, res) => {
+    try {
+      const invitationId = parseInt(req.params.id);
+      const chats = await storage.getChatsForInvitation(invitationId);
+      res.json(chats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch chats" });
+    }
+  });
+
+  app.get("/api/invitations/:id", async (req, res) => {
+    try {
+      const invitationId = parseInt(req.params.id);
+      const invitation = await storage.getInvitation(invitationId);
+      if (!invitation) {
+        return res.status(404).json({ error: "Invitation not found" });
+      }
+
+      const fromUser = await storage.getUser(invitation.fromUserId);
+      const toUser = await storage.getUser(invitation.toUserId);
+      
+      res.json({ ...invitation, fromUser, toUser });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch invitation" });
+    }
+  });
+
   app.get("/api/invitations/:invitationId/chats", async (req, res) => {
     try {
       const invitationId = parseInt(req.params.invitationId);
@@ -176,7 +220,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = parseInt(req.params.id);
       const sessions = await storage.getWorkoutSessionsForUser(userId);
-      res.json(sessions);
+      
+      // Enrich sessions with invitation details
+      const enrichedSessions = await Promise.all(
+        sessions.map(async (session) => {
+          const invitation = await storage.getInvitation(session.invitationId);
+          if (invitation) {
+            const fromUser = await storage.getUser(invitation.fromUserId);
+            const toUser = await storage.getUser(invitation.toUserId);
+            return {
+              ...session,
+              invitation: {
+                ...invitation,
+                fromUser,
+                toUser
+              }
+            };
+          }
+          return session;
+        })
+      );
+
+      res.json(enrichedSessions);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch workout sessions" });
     }

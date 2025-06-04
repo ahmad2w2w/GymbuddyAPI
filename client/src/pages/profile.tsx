@@ -110,7 +110,7 @@ export default function Profile() {
   const toggleWorkout = (workout: string) => {
     setSelectedWorkouts(prev => 
       prev.includes(workout) 
-        ? prev.filter(w => w !== workout)
+        ? prev.filter((w: string) => w !== workout)
         : [...prev, workout]
     );
   };
@@ -118,7 +118,7 @@ export default function Profile() {
   const toggleTimeSlot = (timeSlot: string) => {
     setSelectedTimeSlots(prev => 
       prev.includes(timeSlot) 
-        ? prev.filter(t => t !== timeSlot)
+        ? prev.filter((t: string) => t !== timeSlot)
         : [...prev, timeSlot]
     );
   };
@@ -305,6 +305,7 @@ export default function Profile() {
                             placeholder="Vertel iets over jezelf en je fitness doelen..."
                             className="min-h-[80px]"
                             {...field}
+                            value={field.value || ""}
                           />
                         </FormControl>
                         <FormMessage />
@@ -319,7 +320,7 @@ export default function Profile() {
                       <FormItem>
                         <FormLabel>WhatsApp Nummer (Optioneel)</FormLabel>
                         <FormControl>
-                          <Input placeholder="+31612345678" {...field} />
+                          <Input placeholder="+31612345678" {...field} value={field.value || ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
