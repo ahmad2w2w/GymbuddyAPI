@@ -343,6 +343,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!invitation) {
         return res.status(404).json({ error: "Invitation not found" });
       }
+
+      // Broadcast real-time notification for invitation status change
+      const notification = {
+        type: 'invitation_status_updated',
+        invitationId: invitationId,
+        status: status,
+        invitation: invitation
+      };
+
+      // Notify both sender and receiver
+      broadcastToUser(invitation.fromUserId, notification);
+      broadcastToUser(invitation.toUserId, notification);
       
       res.json(invitation);
     } catch (error) {

@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, MapPin, CheckCircle, XCircle, MessageCircle, Calendar } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
+import ChatInterface from "@/components/chat-interface";
 import { useToast } from "@/hooks/use-toast";
 import { formatTime, formatDate } from "@/lib/utils";
 import type { WorkoutInvitation, User } from "@shared/schema";
@@ -20,6 +22,10 @@ interface InvitationWithUser extends WorkoutInvitation {
 export default function Invitations() {
   const { toast } = useToast();
   const { user: authUser } = useAuth();
+  const [selectedInvitation, setSelectedInvitation] = useState<InvitationWithUser | null>(null);
+  
+  // Initialize WebSocket for real-time updates
+  useWebSocket();
 
   const { data: invitationsData, isLoading } = useQuery({
     queryKey: ["/api/users", authUser?.id, "invitations"],
@@ -80,6 +86,16 @@ export default function Invitations() {
       default: return "Wachten op reactie";
     }
   };
+
+  // Show chat interface if invitation is selected
+  if (selectedInvitation) {
+    return (
+      <ChatInterface 
+        invitation={selectedInvitation as any}
+        onBack={() => setSelectedInvitation(null)}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
