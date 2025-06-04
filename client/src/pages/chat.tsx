@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Phone, MoreVertical, MapPin, Clock, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Send, Phone, MoreVertical, MapPin, Clock, CheckCircle2, Check, CheckCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatTime, formatDate } from "@/lib/utils";
 import type { WorkoutInvitation, User, Chat } from "@shared/schema";
@@ -279,21 +279,20 @@ export default function ChatPage() {
               <div
                 className={`max-w-[280px] px-3 py-2 rounded-lg shadow-sm ${
                   chat.senderId === currentUser.id
-                    ? "bg-blue-500 text-white rounded-br-md"
+                    ? "bg-blue-500 text-white rounded-br-md mr-2"
                     : "bg-white text-gray-900 rounded-bl-md border border-gray-100"
                 }`}
               >
                 <p className="text-sm leading-relaxed break-words">{chat.message}</p>
-                <div className={`text-xs mt-1 ${
-                  chat.senderId === currentUser.id ? "text-blue-100" : "text-gray-500"
+                <div className={`flex items-center gap-1 mt-1 text-xs ${
+                  chat.senderId === currentUser.id ? "justify-end text-blue-100" : "justify-start text-gray-500"
                 }`}>
-                  {formatTime(new Date(chat.sentAt || Date.now()))}
+                  <span>{formatTime(new Date(chat.sentAt || Date.now()))}</span>
+                  {chat.senderId === currentUser.id && (
+                    <CheckCheck className="w-3 h-3" />
+                  )}
                 </div>
               </div>
-              
-              {chat.senderId === currentUser.id && (
-                <div className="w-8 h-8 flex-shrink-0" />
-              )}
             </div>
           ))
         )}
