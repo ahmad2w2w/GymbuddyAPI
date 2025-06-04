@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Home from "@/pages/home";
 import ProfileSetup from "@/pages/profile-setup";
 import Invitations from "@/pages/invitations";
+import Matches from "@/pages/matches";
 import Schedule from "@/pages/schedule";
 import Profile from "@/pages/profile";
 import Chat from "@/pages/chat";
@@ -63,6 +64,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/profile-setup" component={ProfileSetup} />
       <Route path="/invitations" component={Invitations} />
+      <Route path="/matches" component={Matches} />
       <Route path="/schedule" component={Schedule} />
       <Route path="/profile" component={Profile} />
       <Route path="/chat/:invitationId" component={Chat} />
