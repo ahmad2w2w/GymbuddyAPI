@@ -25,10 +25,9 @@ export default function Matches() {
       if (!authUser?.id) throw new Error("No authenticated user");
       const response = await fetch(`/api/users/${authUser.id}/invitations`);
       if (!response.ok) throw new Error("Failed to fetch invitations");
-      return response.json() as Promise<{
-        received: (WorkoutInvitation & { fromUser: User; toUser: User })[];
-        sent: (WorkoutInvitation & { fromUser: User; toUser: User })[];
-      }>;
+      const data = await response.json();
+      console.log("Invitations data:", data); // Debug log
+      return data;
     },
     enabled: !!authUser?.id,
   });
