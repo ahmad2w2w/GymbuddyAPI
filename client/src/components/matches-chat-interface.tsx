@@ -129,44 +129,42 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
           isOwn ? "justify-end pr-1" : "justify-start pl-1"
         )}>
           <div className={cn(
-            "relative max-w-[80%] px-4 py-3 shadow-lg transition-all duration-300 hover:shadow-xl",
-            "backdrop-blur-sm border border-white/20",
+            "relative max-w-[80%] px-4 py-3 shadow-lg transition-all duration-300 hover:shadow-xl backdrop-blur-sm border border-white/20 transform hover:scale-105 hover:-translate-y-0.5",
             isOwn 
               ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white rounded-3xl rounded-br-lg shadow-blue-500/30"
-              : "bg-gradient-to-br from-white via-gray-50 to-gray-100 text-gray-900 rounded-3xl rounded-bl-lg border-gray-200 shadow-gray-300/40",
-            "transform hover:scale-105 hover:-translate-y-0.5"
+              : "bg-gradient-to-br from-white via-gray-50 to-gray-100 text-gray-900 rounded-3xl rounded-bl-lg border-gray-200 shadow-gray-300/40"
           )}
           style={{
             filter: isOwn 
               ? "drop-shadow(0 8px 16px rgba(59, 130, 246, 0.25))" 
               : "drop-shadow(0 6px 12px rgba(0, 0, 0, 0.08))"
           }}
-        >
-          <div
-            className={cn(
-              "absolute bottom-0 w-0 h-0 border-solid",
-              isOwn
-                ? "right-0 translate-x-1 translate-y-1"
-                : "left-0 -translate-x-1 translate-y-1"
-            )}
-            style={{
-              borderLeftWidth: isOwn ? "0" : "10px",
-              borderRightWidth: isOwn ? "10px" : "0",
-              borderTopWidth: "10px",
-              borderBottomWidth: "0",
-              borderLeftColor: isOwn ? "transparent" : "#f3f4f6",
-              borderRightColor: isOwn ? "#4f46e5" : "transparent",
-              borderTopColor: "transparent"
-            }}
-          />
-          
-          <p className={cn(
-            "text-sm leading-relaxed font-medium break-words",
-            isOwn ? "text-white" : "text-gray-800"
-          )}>
-            {msg.message}
-          </p>
-        </div>
+          >
+            <div
+              className={cn(
+                "absolute bottom-0 w-0 h-0 border-solid",
+                isOwn
+                  ? "right-0 translate-x-1 translate-y-1"
+                  : "left-0 -translate-x-1 translate-y-1"
+              )}
+              style={{
+                borderLeftWidth: isOwn ? "0" : "10px",
+                borderRightWidth: isOwn ? "10px" : "0",
+                borderTopWidth: "10px",
+                borderBottomWidth: "0",
+                borderLeftColor: isOwn ? "transparent" : "#f3f4f6",
+                borderRightColor: isOwn ? "#4f46e5" : "transparent",
+                borderTopColor: "transparent"
+              }}
+            />
+            
+            <p className={cn(
+              "text-sm leading-relaxed font-medium break-words",
+              isOwn ? "text-white" : "text-gray-800"
+            )}>
+              {msg.message}
+            </p>
+          </div>
         </div>
         
         {isLastInGroup && (
