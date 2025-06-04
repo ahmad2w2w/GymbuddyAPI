@@ -464,10 +464,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  // Store active connections by invitation ID
+  // Store active connections by user ID and invitation ID
+  const userConnections = new Map<number, Set<WebSocket>>();
   const invitationRooms = new Map<string, Set<WebSocket>>();
 
+  // Helper function to broadcast to user
+  const broadcastToUser = (userId: number, message: any) => {
+    const connections = userConnections.get(userId);
+    if (connections) {
+      connections.forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(message));
+        }
+      });
+    }
+  };
+
   wss.on('connection', (ws: WebSocket) => {
+    let currentUserId: number | null = null;
     let currentInvitationId: string | null = null;
 
     ws.on('message', (message: string) => {
@@ -475,6 +489,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const data = JSON.parse(message);
 
         switch (data.type) {
+          case 'authenticate':
+            if (data.userId) {
+              currentUserId = data.userId;
+              if (!userConnections.has(currentUserId)) {
+                userConnections.set(currentUserId, new Set());
+              }
+              userConnections.get(currentUserId)!.add(ws);
+            }
+            break;
+
           case 'join_invitation':
             if (data.invitationId) {
               currentInvitationId = data.invitationId;
@@ -486,15 +510,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'send_message':
-            if (data.invitationId && invitationRooms.has(data.invitationId)) {
-              const clients = invitationRooms.get(data.invitationId)!;
-              clients.forEach(client => {
-                if (client !== ws && client.readyState === WebSocket.OPEN) {
-                  client.send(JSON.stringify({
-                    type: 'new_message',
-                    invitationId: data.invitationId,
-                    message: data.message
-                  }));
+            if (data.invitationId && data.message && data.senderId) {
+              // Save message to database
+              storage.createChat({
+                invitationId: parseInt(data.invitationId),
+                senderId: data.senderId,
+                message: data.message
+              }).then(() => {
+                // Broadcast to all clients in the invitation room
+                if (invitationRooms.has(data.invitationId)) {
+                  const clients = invitationRooms.get(data.invitationId)!;
+                  clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                      client.send(JSON.stringify({
+                        type: 'new_message',
+                        invitationId: data.invitationId,
+                        message: data.message,
+                        senderId: data.senderId,
+                        timestamp: new Date().toISOString()
+                      }));
+                    }
+                  });
                 }
               });
             }
@@ -506,6 +542,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     ws.on('close', () => {
+      // Remove from user connections
+      if (currentUserId && userConnections.has(currentUserId)) {
+        userConnections.get(currentUserId)!.delete(ws);
+        if (userConnections.get(currentUserId)!.size === 0) {
+          userConnections.delete(currentUserId);
+        }
+      }
+      
+      // Remove from invitation room
       if (currentInvitationId && invitationRooms.has(currentInvitationId)) {
         invitationRooms.get(currentInvitationId)!.delete(ws);
         if (invitationRooms.get(currentInvitationId)!.size === 0) {
