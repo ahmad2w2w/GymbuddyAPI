@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { User, Settings, MapPin, Clock, Trophy, Target } from "lucide-react";
+import { User, Settings, MapPin, Clock, Trophy, Target, LogOut } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useToast } from "@/hooks/use-toast";
 import type { InsertUser } from "@shared/schema";
@@ -30,6 +31,7 @@ export default function Profile() {
   const [selectedWorkouts, setSelectedWorkouts] = useState<string[]>([]);
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
   const { toast } = useToast();
+  const { logout, isLoggingOut } = useAuth();
 
   const { data: user, isLoading } = useQuery({
     queryKey: ["/api/users", currentUser.id],
@@ -146,13 +148,37 @@ export default function Profile() {
             <h1 className="text-2xl font-bold text-fitness-dark">Mijn Profiel</h1>
             <p className="text-gray-600">Beheer je account en voorkeuren</p>
           </div>
-          <Button 
-            variant={isEditing ? "outline" : "default"}
-            onClick={() => setIsEditing(!isEditing)}
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            {isEditing ? "Annuleren" : "Bewerken"}
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant={isEditing ? "outline" : "default"}
+              onClick={() => setIsEditing(!isEditing)}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              {isEditing ? "Annuleren" : "Bewerken"}
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await logout();
+                  toast({
+                    title: "Uitgelogd",
+                    description: "Je bent succesvol uitgelogd.",
+                  });
+                } catch (error) {
+                  toast({
+                    title: "Fout",
+                    description: "Uitloggen mislukt. Probeer opnieuw.",
+                    variant: "destructive",
+                  });
+                }
+              }}
+              disabled={isLoggingOut}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              {isLoggingOut ? "..." : "Uitloggen"}
+            </Button>
+          </div>
         </div>
       </header>
 
