@@ -119,11 +119,13 @@ export default function ChatPage() {
 
   const createWorkoutSessionMutation = useMutation({
     mutationFn: async () => {
+      const currentUser = { id: 1 }; // Mock current user ID - should match your login
       const response = await apiRequest("POST", "/api/workout-sessions", {
         invitationId: parseInt(invitationId!),
-        location: invitation?.location,
-        workoutType: invitation?.workoutType,
-        scheduledTime: invitation?.proposedTime || new Date().toISOString(),
+        scheduledTime: invitation?.proposedTime || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
+        location: invitation?.location || "Westside Fitness",
+        workoutType: invitation?.workoutType || "Strength",
+        status: "scheduled"
       });
       return response.json();
     },
@@ -134,7 +136,8 @@ export default function ChatPage() {
       });
       setLocation("/schedule");
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("Workout planning error:", error);
       toast({
         title: "Fout",
         description: "Kon workout niet plannen. Probeer opnieuw.",
