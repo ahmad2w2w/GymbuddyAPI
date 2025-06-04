@@ -54,34 +54,41 @@ export default function ChatPage() {
 
     ws.onopen = () => {
       setIsConnected(true);
-      setSocket(ws);
       // Join the invitation room
       ws.send(JSON.stringify({
         type: "join_invitation",
-        invitationId: invitationId
+        invitationId: invitationId,
+        userId: currentUser.id
       }));
     };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "new_message" && data.invitationId === invitationId) {
+        // Invalidate chat query to refetch messages
         queryClient.invalidateQueries({ queryKey: ["/api/invitations", invitationId, "chats"] });
       }
     };
 
     ws.onclose = () => {
       setIsConnected(false);
-      setSocket(null);
     };
 
     ws.onerror = () => {
       setIsConnected(false);
+      toast({
+        title: "Verbindingsfout",
+        description: "Kon geen real-time verbinding maken. Berichten worden mogelijk vertraagd.",
+        variant: "destructive",
+      });
     };
+
+    setSocket(ws);
 
     return () => {
       ws.close();
     };
-  }, [invitationId]);
+  }, [invitationId, currentUser.id, toast]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -159,7 +166,7 @@ export default function ChatPage() {
 
   if (invitationLoading || chatsLoading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-fitness-light flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="text-gray-600">Chat laden...</p>
@@ -179,7 +186,7 @@ export default function ChatPage() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div 
-            className="w-10 h-10 bg-cover bg-center rounded-full bg-purple-500 flex items-center justify-center"
+            className="w-10 h-10 bg-cover bg-center rounded-full bg-fitness-blue flex items-center justify-center"
             style={{ backgroundImage: otherUser?.profileImage ? `url(${otherUser.profileImage})` : undefined }}
           >
             {!otherUser?.profileImage && (
@@ -189,7 +196,7 @@ export default function ChatPage() {
             )}
           </div>
           <div>
-            <h2 className="font-semibold text-gray-900">{otherUser?.name}</h2>
+            <h2 className="font-semibold text-fitness-dark">{otherUser?.name}</h2>
             <div className="flex items-center">
               <div className={`w-2 h-2 rounded-full mr-1 ${isConnected ? "bg-green-500" : "bg-gray-400"}`} />
               <p className="text-sm text-gray-600">
@@ -230,7 +237,7 @@ export default function ChatPage() {
             {invitation.status === "accepted" && (
               <Button 
                 size="sm" 
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-fitness-green hover:bg-green-600"
                 onClick={handleScheduleWorkout}
                 disabled={createWorkoutSessionMutation.isPending}
               >
@@ -243,23 +250,10 @@ export default function ChatPage() {
       )}
 
       {/* Chat Messages */}
-      <div 
-        className="flex-1 px-4 py-6 space-y-2 overflow-y-auto relative"
-        style={{
-          background: `
-            linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #e0f2fe 100%),
-            radial-gradient(circle at 15% 25%, rgba(59, 130, 246, 0.12) 0%, transparent 50%),
-            radial-gradient(circle at 85% 75%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
-            repeating-linear-gradient(
-              45deg,
-              transparent,
-              transparent 35px,
-              rgba(59, 130, 246, 0.02) 35px,
-              rgba(59, 130, 246, 0.02) 70px
-            )
-          `
-        }}
-      >
+      <div className="flex-1 px-4 py-6 space-y-2 overflow-y-auto relative"
+           style={{
+             background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #f8fafc 100%), radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 60%), radial-gradient(circle at 80% 70%, rgba(16, 185, 129, 0.04) 0%, transparent 60%)'
+           }}>
         {chats.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
