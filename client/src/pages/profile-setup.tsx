@@ -45,12 +45,18 @@ export default function ProfileSetup() {
   });
 
   const onSubmit = async (data: ProfileSetup) => {
+    console.log("Form submitted with data:", data);
+    console.log("Selected workouts:", selectedWorkouts);
+    console.log("Selected time slots:", selectedTimeSlots);
+    
     try {
       const profileData = {
         ...data,
         preferredWorkouts: selectedWorkouts,
         preferredTimeSlots: selectedTimeSlots,
       };
+      
+      console.log("Complete profile data:", profileData);
       
       await completeProfile(profileData);
       
@@ -61,6 +67,7 @@ export default function ProfileSetup() {
       
       navigate("/");
     } catch (error: any) {
+      console.error("Profile completion error:", error);
       toast({
         title: "Fout",
         description: error.message || "Profiel aanmaken mislukt. Probeer opnieuw.",
