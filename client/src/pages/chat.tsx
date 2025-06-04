@@ -22,6 +22,7 @@ export default function ChatPage() {
   const [message, setMessage] = useState("");
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -263,39 +264,76 @@ export default function ChatPage() {
             </p>
           </div>
         ) : (
-          chats.map((chat: Chat) => (
-            <div
-              key={chat.id}
-              className={`flex items-end gap-2 mb-1 ${chat.senderId === currentUser.id ? "justify-end" : "justify-start"}`}
-            >
-              {chat.senderId !== currentUser.id && (
-                <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center mb-1">
-                  <span className="text-white text-sm font-medium">
-                    {otherUser?.name?.charAt(0) || "U"}
-                  </span>
-                </div>
-              )}
-              
-              <div
-                className={`max-w-[280px] px-3 py-2 rounded-lg shadow-sm ${
-                  chat.senderId === currentUser.id
-                    ? "bg-blue-500 text-white rounded-br-md mr-2"
-                    : "bg-white text-gray-900 rounded-bl-md border border-gray-100"
-                }`}
-              >
-                <p className="text-sm leading-relaxed break-words">{chat.message}</p>
-                <div className={`flex items-center gap-1 mt-1 text-xs ${
-                  chat.senderId === currentUser.id ? "justify-end text-blue-100" : "justify-start text-gray-500"
-                }`}>
-                  <span>{formatTime(new Date(chat.sentAt || Date.now()))}</span>
-                  {chat.senderId === currentUser.id && (
-                    <CheckCheck className="w-3 h-3" />
+          chats.map((chat: Chat, index: number) => {
+            const isOwn = chat.senderId === currentUser.id;
+            const isLastInGroup = index === chats.length - 1 || chats[index + 1]?.senderId !== chat.senderId;
+            const isFirstInGroup = index === 0 || chats[index - 1]?.senderId !== chat.senderId;
+            
+            return (
+              <div key={chat.id} className="mb-1">
+                <div className={`flex items-end gap-2 ${isOwn ? "justify-end" : "justify-start"}`}>
+                  {!isOwn && isLastInGroup && (
+                    <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center mb-1">
+                      <span className="text-white text-sm font-medium">
+                        {otherUser?.name?.charAt(0) || "U"}
+                      </span>
+                    </div>
                   )}
+                  {!isOwn && !isLastInGroup && (
+                    <div className="w-8 h-8 mb-1" />
+                  )}
+                  
+                  <div
+                    className={`relative max-w-[280px] px-3 py-2 shadow-sm ${
+                      isOwn
+                        ? `bg-blue-500 text-white mr-2 ${
+                            isFirstInGroup && isLastInGroup ? "rounded-lg" :
+                            isFirstInGroup ? "rounded-lg rounded-br-md" :
+                            isLastInGroup ? "rounded-lg rounded-tr-md" :
+                            "rounded-lg rounded-r-md"
+                          }`
+                        : `bg-white text-gray-900 border border-gray-100 ${
+                            isFirstInGroup && isLastInGroup ? "rounded-lg" :
+                            isFirstInGroup ? "rounded-lg rounded-bl-md" :
+                            isLastInGroup ? "rounded-lg rounded-tl-md" :
+                            "rounded-lg rounded-l-md"
+                          }`
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed break-words">{chat.message}</p>
+                    {isLastInGroup && (
+                      <div className={`flex items-center gap-1 mt-1 text-xs ${
+                        isOwn ? "justify-end text-blue-100" : "justify-start text-gray-500"
+                      }`}>
+                        <span>{formatTime(new Date(chat.sentAt || Date.now()))}</span>
+                        {isOwn && <CheckCheck className="w-3 h-3" />}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
+        
+        {/* Typing indicator */}
+        {isTyping && (
+          <div className="flex items-end gap-2 mb-1">
+            <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center mb-1">
+              <span className="text-white text-sm font-medium">
+                {otherUser?.name?.charAt(0) || "U"}
+              </span>
+            </div>
+            <div className="bg-white rounded-lg rounded-bl-md px-3 py-2 shadow-sm border border-gray-100">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div ref={messagesEndRef} />
       </div>
 
