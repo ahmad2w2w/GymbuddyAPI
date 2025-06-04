@@ -17,8 +17,8 @@ export const users = pgTable("users", {
   whatsappNumber: text("whatsapp_number"),
   latitude: text("latitude"),
   longitude: text("longitude"),
-  rating: text("rating").default("5.0"),
-  workoutCount: integer("workout_count").default(0),
+  rating: text("rating").default("5.0").notNull(),
+  workoutCount: integer("workout_count").default(0).notNull(),
 });
 
 export const matches = pgTable("matches", {
