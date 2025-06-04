@@ -49,9 +49,16 @@ export default function Matches() {
 
   // Show chat interface if match is selected
   if (selectedMatch) {
+    // Ensure proper data structure for chat interface
+    const chatInvitation = {
+      ...selectedMatch,
+      fromUser: selectedMatch.fromUser || selectedMatch.otherUser,
+      toUser: selectedMatch.toUser || (selectedMatch.fromUserId === authUser?.id ? selectedMatch.otherUser : authUser)
+    };
+    
     return (
       <ModernChatInterface 
-        invitation={selectedMatch as any}
+        invitation={chatInvitation as any}
         onBack={() => setSelectedMatch(null)}
       />
     );
