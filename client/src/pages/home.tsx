@@ -5,16 +5,24 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Bell, MapPin, ChevronDown, Sliders, Star, MessageCircle, Phone, Clock, Users } from "lucide-react";
-import BottomNavigation from "@/components/bottom-navigation";
+import { Bell, MapPin, ChevronDown, Sliders, Star, MessageCircle, Phone, Clock, Users, Grid, List, Search } from "lucide-react";
+import EnhancedBottomNavigation from "@/components/enhanced-bottom-navigation";
+import EnhancedHeader from "@/components/enhanced-header";
+import BreadcrumbNavigation from "@/components/breadcrumb-navigation";
+import LoadingSkeleton from "@/components/loading-skeleton";
+import PullToRefresh from "@/components/pull-to-refresh";
+import EnhancedUserCard from "@/components/enhanced-user-card";
 import LocationFilter, { type LocationFilters } from "@/components/location-filter";
 import { useToast } from "@/hooks/use-toast";
+import { calculateDistance, cn } from "@/lib/utils";
 import { FaWhatsapp } from "react-icons/fa";
 import type { User } from "@shared/schema";
 
 export default function Home() {
   const [selectedFilters, setSelectedFilters] = useState(["Now Available"]);
   const [showLocationFilter, setShowLocationFilter] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchQuery, setSearchQuery] = useState("");
   const [locationFilters, setLocationFilters] = useState<LocationFilters>({
     maxDistance: 5,
     location: "All Locations",
@@ -305,7 +313,7 @@ export default function Home() {
       )}
 
       {/* Bottom Navigation */}
-      <BottomNavigation currentPage="discover" />
+      <EnhancedBottomNavigation currentPage="discover" />
     </div>
   );
 }

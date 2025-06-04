@@ -90,7 +90,6 @@ export default function EnhancedHeader({
 
             {/* User Avatar */}
             <Avatar className="w-8 h-8 ring-2 ring-white shadow-md">
-              <AvatarImage src={user?.profileImage || undefined} />
               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm">
                 {user?.name?.charAt(0) || "?"}
               </AvatarFallback>

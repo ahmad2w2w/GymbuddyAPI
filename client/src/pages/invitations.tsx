@@ -90,7 +90,7 @@ export default function Invitations() {
   // Show chat interface if invitation is selected
   if (selectedInvitation) {
     return (
-      <ChatInterface 
+      <ModernChatInterface 
         invitation={selectedInvitation as any}
         onBack={() => setSelectedInvitation(null)}
       />
