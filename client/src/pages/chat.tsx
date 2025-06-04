@@ -98,7 +98,7 @@ export default function ChatPage() {
     mutationFn: async (messageData: { content: string }) => {
       const response = await apiRequest("POST", `/api/invitations/${invitationId}/chats`, {
         senderId: currentUser.id,
-        content: messageData.content,
+        message: messageData.content,
       });
       return response.json();
     },
@@ -275,11 +275,11 @@ export default function ChatPage() {
                     : "bg-white text-fitness-dark border border-gray-200"
                 }`}
               >
-                <p>{chat.content}</p>
+                <p>{chat.message}</p>
                 <p className={`text-xs mt-1 ${
                   chat.senderId === currentUser.id ? "text-blue-100" : "text-gray-500"
                 }`}>
-                  {formatTime(new Date(chat.createdAt))}
+                  {formatTime(new Date(chat.sentAt || Date.now()))}
                 </p>
               </div>
             </div>

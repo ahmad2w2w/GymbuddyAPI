@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertUserSchema, insertWorkoutInvitationSchema, insertChatSchema } from "@shared/schema";
+import { insertUserSchema, insertWorkoutInvitationSchema, insertChatSchema, insertWorkoutSessionSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -181,6 +182,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // WebSocket server setup for real-time chat
   const httpServer = createServer(app);
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+
+  // Store active connections by invitation ID
+  const invitationRooms = new Map<string, Set<WebSocket>>();
+
+  wss.on('connection', (ws: WebSocket) => {
+    let currentInvitationId: string | null = null;
+
+    ws.on('message', (message: string) => {
+      try {
+        const data = JSON.parse(message);
+
+        switch (data.type) {
+          case 'join_invitation':
+            if (data.invitationId) {
+              currentInvitationId = data.invitationId;
+              if (!invitationRooms.has(currentInvitationId)) {
+                invitationRooms.set(currentInvitationId, new Set());
+              }
+              invitationRooms.get(currentInvitationId)!.add(ws);
+            }
+            break;
+
+          case 'send_message':
+            if (data.invitationId && invitationRooms.has(data.invitationId)) {
+              const clients = invitationRooms.get(data.invitationId)!;
+              clients.forEach(client => {
+                if (client !== ws && client.readyState === WebSocket.OPEN) {
+                  client.send(JSON.stringify({
+                    type: 'new_message',
+                    invitationId: data.invitationId,
+                    message: data.message
+                  }));
+                }
+              });
+            }
+            break;
+        }
+      } catch (error) {
+        console.error('WebSocket message error:', error);
+      }
+    });
+
+    ws.on('close', () => {
+      if (currentInvitationId && invitationRooms.has(currentInvitationId)) {
+        invitationRooms.get(currentInvitationId)!.delete(ws);
+        if (invitationRooms.get(currentInvitationId)!.size === 0) {
+          invitationRooms.delete(currentInvitationId);
+        }
+      }
+    });
+  });
+
   return httpServer;
 }
