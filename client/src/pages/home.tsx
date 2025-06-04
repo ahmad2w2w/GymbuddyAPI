@@ -3,88 +3,26 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, MapPin, ChevronDown, Sliders, Star, Heart, X } from "lucide-react";
-import UserCard from "@/components/user-card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Bell, MapPin, ChevronDown, Sliders, Star, MessageCircle, Phone, Clock, Users } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
-import MatchModal from "@/components/match-modal";
 import { useToast } from "@/hooks/use-toast";
+import { FaWhatsapp } from "react-icons/fa";
 import type { User } from "@shared/schema";
 
 export default function Home() {
   const [currentUser] = useState({ id: 1 }); // Mock current user ID
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [showMatchModal, setShowMatchModal] = useState(false);
-  const [matchedUser, setMatchedUser] = useState<User | null>(null);
   const [selectedFilters, setSelectedFilters] = useState(["Now Available"]);
   const { toast } = useToast();
 
-  const { data: potentialMatches = [], isLoading } = useQuery({
+  const { data: availableUsers = [], isLoading } = useQuery({
     queryKey: ["/api/users", currentUser.id, "potential-matches"],
     queryFn: async () => {
       const response = await fetch(`/api/users/${currentUser.id}/potential-matches`);
-      if (!response.ok) throw new Error("Failed to fetch potential matches");
+      if (!response.ok) throw new Error("Failed to fetch available users");
       return response.json();
     },
   });
-
-  const createMatchMutation = useMutation({
-    mutationFn: async (targetUserId: number) => {
-      const response = await apiRequest("POST", "/api/matches", {
-        user1Id: currentUser.id,
-        user2Id: targetUserId,
-        status: "pending"
-      });
-      return response.json();
-    },
-    onSuccess: (data) => {
-      if (data.mutual) {
-        setMatchedUser(potentialMatches[currentCardIndex]);
-        setShowMatchModal(true);
-        toast({
-          title: "It's a Match!",
-          description: "You both want to workout together!",
-        });
-      } else {
-        toast({
-          title: "Like sent!",
-          description: "We'll notify you if they like you back.",
-        });
-      }
-      nextCard();
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to send like. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const currentCard = potentialMatches[currentCardIndex];
-
-  const nextCard = () => {
-    if (currentCardIndex < potentialMatches.length - 1) {
-      setCurrentCardIndex(prev => prev + 1);
-    }
-  };
-
-  const handleLike = () => {
-    if (currentCard) {
-      createMatchMutation.mutate(currentCard.id);
-    }
-  };
-
-  const handlePass = () => {
-    nextCard();
-  };
-
-  const handleSuperLike = () => {
-    if (currentCard) {
-      // For now, treat super like same as regular like
-      createMatchMutation.mutate(currentCard.id);
-    }
-  };
 
   const toggleFilter = (filter: string) => {
     setSelectedFilters(prev => 
@@ -95,6 +33,25 @@ export default function Home() {
   };
 
   const workoutTypes = ["Strength", "Cardio", "Yoga", "Outdoor", "Swimming"];
+
+  const filteredUsers = availableUsers.filter((user: User) => {
+    if (selectedFilters.includes("Now Available") && !user.availableNow) {
+      return false;
+    }
+    return true;
+  });
+
+  const handleDirectContact = (user: User) => {
+    if (user.whatsappNumber) {
+      window.open(`https://wa.me/${user.whatsappNumber}`, '_blank');
+    } else {
+      toast({
+        title: "Contact niet beschikbaar",
+        description: "Deze gebruiker heeft geen WhatsApp nummer gedeeld.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -147,87 +104,104 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="px-4 py-2 pb-24">
-        {potentialMatches.length === 0 ? (
+        {filteredUsers.length === 0 ? (
           <div className="text-center py-20">
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Heart className="w-10 h-10 text-gray-400" />
+              <Users className="w-10 h-10 text-gray-400" />
             </div>
             <h3 className="text-xl font-semibold text-fitness-dark mb-2">
-              No more potential matches
+              Geen beschikbare trainingspartners
             </h3>
             <p className="text-gray-600">
-              Check back later or expand your preferences!
-            </p>
-          </div>
-        ) : currentCardIndex >= potentialMatches.length ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Heart className="w-10 h-10 text-gray-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-fitness-dark mb-2">
-              You've seen everyone for now
-            </h3>
-            <p className="text-gray-600">
-              Come back later for more workout buddies!
+              Probeer later opnieuw of pas je filters aan!
             </p>
           </div>
         ) : (
-          <div className="relative">
-            {/* Current Card */}
-            <UserCard 
-              user={currentCard} 
-              onLike={handleLike}
-              onPass={handlePass}
-              onSuperLike={handleSuperLike}
-            />
+          <div className="space-y-4">
+            {filteredUsers.map((user: User) => (
+              <Card key={user.id} className="overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-0">
+                  <div className="flex">
+                    {/* Profile Image */}
+                    <div 
+                      className="w-24 h-24 bg-cover bg-center flex-shrink-0"
+                      style={{ backgroundImage: `url(${user.profileImage})` }}
+                    />
+                    
+                    {/* User Info */}
+                    <div className="flex-1 p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h3 className="font-semibold text-fitness-dark flex items-center">
+                            {user.name}, {user.age}
+                            {user.availableNow && (
+                              <div className="ml-2 w-2 h-2 bg-green-500 rounded-full"></div>
+                            )}
+                          </h3>
+                          <div className="flex items-center text-sm text-gray-600 mt-1">
+                            <MapPin className="w-3 h-3 mr-1" />
+                            <span>{user.location}</span>
+                            <span className="mx-2">•</span>
+                            <span>{user.experienceLevel}</span>
+                          </div>
+                          {user.availableNow && (
+                            <div className="flex items-center text-sm text-green-600 mt-1">
+                              <Clock className="w-3 h-3 mr-1" />
+                              <span>Nu beschikbaar</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center text-sm text-orange-500">
+                          <Star className="w-3 h-3 mr-1" />
+                          <span>{user.rating}</span>
+                        </div>
+                      </div>
 
-            {/* Action Buttons */}
-            <div className="flex justify-center space-x-6 mb-6 mt-6">
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-16 h-16 rounded-full border-2 border-gray-200 hover:border-red-300"
-                onClick={handlePass}
-                disabled={createMatchMutation.isPending}
-              >
-                <X className="w-6 h-6 text-red-500" />
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-16 h-16 rounded-full border-2 border-gray-200 hover:border-orange-300"
-                onClick={handleSuperLike}
-                disabled={createMatchMutation.isPending}
-              >
-                <Star className="w-6 h-6 text-orange-500" />
-              </Button>
-              <Button
-                size="lg"
-                className="w-16 h-16 bg-fitness-green hover:bg-green-600 rounded-full"
-                onClick={handleLike}
-                disabled={createMatchMutation.isPending}
-              >
-                <Heart className="w-6 h-6 text-white" />
-              </Button>
-            </div>
+                      {/* Bio */}
+                      {user.bio && (
+                        <p className="text-sm text-gray-700 mb-3 line-clamp-2">
+                          {user.bio}
+                        </p>
+                      )}
 
-            {/* Next Card Preview */}
-            {currentCardIndex + 1 < potentialMatches.length && (
-              <div className="bg-gray-100 rounded-2xl overflow-hidden -mt-6 relative z-[-1] transform scale-95">
-                <div 
-                  className="h-32 bg-cover bg-center"
-                  style={{ backgroundImage: `url(${potentialMatches[currentCardIndex + 1].profileImage})` }}
-                />
-                <div className="p-3">
-                  <h4 className="font-semibold text-fitness-dark">
-                    {potentialMatches[currentCardIndex + 1].name}, {potentialMatches[currentCardIndex + 1].age}
-                  </h4>
-                  <p className="text-sm text-gray-600">
-                    {potentialMatches[currentCardIndex + 1].location} • {potentialMatches[currentCardIndex + 1].experienceLevel}
-                  </p>
-                </div>
-              </div>
-            )}
+                      {/* Workout Preferences */}
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {user.preferredWorkouts.slice(0, 3).map((workout) => (
+                          <Badge key={workout} variant="secondary" className="text-xs">
+                            {workout}
+                          </Badge>
+                        ))}
+                        {user.preferredWorkouts.length > 3 && (
+                          <Badge variant="secondary" className="text-xs">
+                            +{user.preferredWorkouts.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex space-x-2">
+                        <Button 
+                          size="sm" 
+                          className="flex-1 bg-fitness-green hover:bg-green-600"
+                          onClick={() => handleDirectContact(user)}
+                        >
+                          <FaWhatsapp className="w-4 h-4 mr-2" />
+                          Direct Contact
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                        >
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          Chat
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
       </main>
@@ -242,23 +216,6 @@ export default function Home() {
 
       {/* Bottom Navigation */}
       <BottomNavigation currentPage="discover" />
-
-      {/* Match Modal */}
-      {showMatchModal && matchedUser && (
-        <MatchModal
-          user={matchedUser}
-          onClose={() => setShowMatchModal(false)}
-          onStartChat={() => {
-            // Navigate to chat
-            setShowMatchModal(false);
-          }}
-          onWhatsApp={() => {
-            if (matchedUser.whatsappNumber) {
-              window.open(`https://wa.me/${matchedUser.whatsappNumber}`, '_blank');
-            }
-          }}
-        />
-      )}
     </div>
   );
 }
