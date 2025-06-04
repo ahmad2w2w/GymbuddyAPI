@@ -213,7 +213,11 @@ export default function Invitations() {
                         )}
 
                         {invitation.status === "accepted" && (
-                          <Button size="sm" className="bg-fitness-blue hover:bg-blue-600">
+                          <Button 
+                            size="sm" 
+                            className="bg-fitness-blue hover:bg-blue-600"
+                            onClick={() => setSelectedInvitation(invitation)}
+                          >
                             <MessageCircle className="w-4 h-4 mr-1" />
                             Chat Starten
                           </Button>
@@ -282,7 +286,11 @@ export default function Invitations() {
                         </div>
 
                         {invitation.status === "accepted" && (
-                          <Button size="sm" className="bg-fitness-blue hover:bg-blue-600">
+                          <Button 
+                            size="sm" 
+                            className="bg-fitness-blue hover:bg-blue-600"
+                            onClick={() => setSelectedInvitation(invitation)}
+                          >
                             <MessageCircle className="w-4 h-4 mr-1" />
                             Chat Starten
                           </Button>
