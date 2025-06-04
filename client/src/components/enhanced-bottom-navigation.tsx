@@ -65,9 +65,9 @@ export default function EnhancedBottomNavigation({
 
           return (
             <Link key={item.id} href={item.path}>
-              <a className={cn(
+              <div className={cn(
                 "flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-200 relative",
-                "min-w-[60px] group",
+                "min-w-[60px] group cursor-pointer",
                 isActive 
                   ? "text-blue-600 bg-blue-50 scale-105" 
                   : "text-gray-600 hover:text-blue-500 hover:bg-gray-50"
@@ -95,7 +95,7 @@ export default function EnhancedBottomNavigation({
                 {isActive && (
                   <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full" />
                 )}
-              </a>
+              </div>
             </Link>
           );
         })}

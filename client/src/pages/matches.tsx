@@ -3,50 +3,64 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Calendar, MapPin, Star } from "lucide-react";
-import BottomNavigation from "@/components/bottom-navigation";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MessageCircle, Calendar, MapPin, Star, Clock, Dumbbell } from "lucide-react";
+import EnhancedBottomNavigation from "@/components/enhanced-bottom-navigation";
+import EnhancedHeader from "@/components/enhanced-header";
+import LoadingSkeleton from "@/components/loading-skeleton";
 import { Link } from "wouter";
-import type { Match, User } from "@shared/schema";
+import { formatTime, formatDate, getWorkoutEmoji } from "@/lib/utils";
+import type { WorkoutInvitation, User } from "@shared/schema";
 
-interface MatchWithUser extends Match {
+interface MatchWithUser extends WorkoutInvitation {
   otherUser: User;
 }
 
 export default function Matches() {
   const { user: authUser } = useAuth();
 
-  const { data: matches = [], isLoading } = useQuery({
-    queryKey: ["/api/users", authUser?.id, "matches"],
+  const { data: invitationsData, isLoading } = useQuery({
+    queryKey: ["/api/users", authUser?.id, "invitations"],
     queryFn: async () => {
       if (!authUser?.id) throw new Error("No authenticated user");
-      const response = await fetch(`/api/users/${authUser.id}/matches`);
-      if (!response.ok) throw new Error("Failed to fetch matches");
-      return response.json() as Promise<MatchWithUser[]>;
+      const response = await fetch(`/api/users/${authUser.id}/invitations`);
+      if (!response.ok) throw new Error("Failed to fetch invitations");
+      return response.json() as Promise<{
+        received: (WorkoutInvitation & { fromUser: User; toUser: User })[];
+        sent: (WorkoutInvitation & { fromUser: User; toUser: User })[];
+      }>;
     },
     enabled: !!authUser?.id,
   });
 
+  // Filter for accepted invitations (matches)
+  const matches = [
+    ...(invitationsData?.received || []).filter(inv => inv.status === 'accepted').map(inv => ({
+      ...inv,
+      otherUser: inv.fromUser
+    })),
+    ...(invitationsData?.sent || []).filter(inv => inv.status === 'accepted').map(inv => ({
+      ...inv,
+      otherUser: inv.toUser
+    }))
+  ];
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-fitness-light">
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading your matches...</p>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+        <EnhancedHeader title="Je Matches" />
+        <div className="pt-4 pb-20">
+          <LoadingSkeleton type="list" count={3} className="px-4" />
         </div>
-        <BottomNavigation currentPage="matches" />
+        <EnhancedBottomNavigation currentPage="matches" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-fitness-light">
-      {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-4">
-        <h1 className="text-2xl font-bold text-fitness-dark">Your Matches</h1>
-        <p className="text-gray-600">Start chatting and plan your workouts!</p>
-      </header>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+      {/* Enhanced Header */}
+      <EnhancedHeader title="Je Matches" />
 
       {/* Matches List */}
       <main className="px-4 py-4 pb-24">
@@ -188,7 +202,7 @@ export default function Matches() {
         )}
       </main>
 
-      <BottomNavigation currentPage="matches" />
+      <EnhancedBottomNavigation currentPage="matches" />
     </div>
   );
 }
