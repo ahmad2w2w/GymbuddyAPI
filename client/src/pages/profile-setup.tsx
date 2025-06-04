@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertUserSchema } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
+import { profileSetupSchema } from "@shared/schema";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { InsertUser } from "@shared/schema";
+import type { ProfileSetup } from "@shared/schema";
 
 const workoutTypes = ["Strength", "Cardio", "Yoga", "Swimming", "Running", "Cycling", "Boxing", "Outdoor"];
 const experienceLevels = ["Beginner", "Intermediate", "Advanced"];
@@ -27,9 +26,10 @@ export default function ProfileSetup() {
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { completeProfile, isCompletingProfile } = useAuth();
 
-  const form = useForm<InsertUser>({
-    resolver: zodResolver(insertUserSchema),
+  const form = useForm<ProfileSetup>({
+    resolver: zodResolver(profileSetupSchema),
     defaultValues: {
       name: "",
       age: 25,
@@ -44,34 +44,29 @@ export default function ProfileSetup() {
     },
   });
 
-  const createUserMutation = useMutation({
-    mutationFn: async (userData: InsertUser) => {
-      const response = await apiRequest("POST", "/api/users", userData);
-      return response.json();
-    },
-    onSuccess: () => {
+  const onSubmit = async (data: ProfileSetup) => {
+    try {
+      const profileData = {
+        ...data,
+        preferredWorkouts: selectedWorkouts,
+        preferredTimeSlots: selectedTimeSlots,
+      };
+      
+      await completeProfile(profileData);
+      
       toast({
-        title: "Profile created!",
-        description: "Welcome to FitBuddy! Let's find your workout partners.",
+        title: "Profiel voltooid!",
+        description: "Welkom bij FitBuddy! Laten we je trainingspartners zoeken.",
       });
+      
       navigate("/");
-    },
-    onError: () => {
+    } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Failed to create profile. Please try again.",
+        title: "Fout",
+        description: error.message || "Profiel aanmaken mislukt. Probeer opnieuw.",
         variant: "destructive",
       });
-    },
-  });
-
-  const onSubmit = (data: InsertUser) => {
-    const profileData = {
-      ...data,
-      preferredWorkouts: selectedWorkouts,
-      preferredTimeSlots: selectedTimeSlots,
-    };
-    createUserMutation.mutate(profileData);
+    }
   };
 
   const toggleWorkout = (workout: string) => {
@@ -319,9 +314,9 @@ export default function ProfileSetup() {
                 <Button 
                   type="submit" 
                   className="w-full bg-fitness-blue hover:bg-blue-600"
-                  disabled={createUserMutation.isPending}
+                  disabled={isCompletingProfile}
                 >
-                  {createUserMutation.isPending ? "Creating Profile..." : "Create Profile & Start Matching"}
+                  {isCompletingProfile ? "Profiel aanmaken..." : "Profiel voltooien & Starten"}
                 </Button>
               </form>
             </Form>
