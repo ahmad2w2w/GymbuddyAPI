@@ -78,7 +78,7 @@ export class DatabaseStorage implements IStorage {
       return await db
         .select()
         .from(users)
-        .where(and(eq(users.location, location), ne(users.id, excludeUserId)));
+        .where(and(eq(users.location, location), not(eq(users.id, excludeUserId))));
     }
     return await db.select().from(users).where(eq(users.location, location));
   }
@@ -161,7 +161,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(workoutSessions)
-      .where(workoutSessions.matchId.in(matchIds));
+      .where(inArray(workoutSessions.matchId, matchIds));
   }
 
   async updateWorkoutSessionStatus(sessionId: number, status: string): Promise<WorkoutSession | undefined> {
