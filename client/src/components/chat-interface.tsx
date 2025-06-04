@@ -48,12 +48,6 @@ export default function ChatInterface({ invitation, onBack }: ChatInterfaceProps
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (messageText: string) => {
-      // Send via WebSocket for real-time delivery
-      if (user?.id) {
-        sendChatMessage(invitation.id.toString(), messageText, user.id);
-      }
-      
-      // Also save to database via API
       const response = await apiRequest("POST", `/api/invitations/${invitation.id}/chats`, {
         senderId: user?.id,
         message: messageText
@@ -62,6 +56,7 @@ export default function ChatInterface({ invitation, onBack }: ChatInterfaceProps
     },
     onSuccess: () => {
       setMessage("");
+      // Refresh messages to show the new message immediately
       queryClient.invalidateQueries({ queryKey: ["/api/invitations", invitation.id, "chats"] });
     },
     onError: () => {

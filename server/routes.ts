@@ -384,6 +384,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invitationId
       });
       const chat = await storage.createChat(chatData);
+
+      // Broadcast the new message to all clients in the invitation room via WebSocket
+      const invitationRoomKey = invitationId.toString();
+      if (invitationRooms.has(invitationRoomKey)) {
+        const clients = invitationRooms.get(invitationRoomKey)!;
+        const broadcastMessage = {
+          type: 'new_message',
+          invitationId: invitationId,
+          chat: chat
+        };
+
+        clients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(broadcastMessage));
+          }
+        });
+      }
+
       res.status(201).json(chat);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -522,30 +540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'send_message':
-            if (data.invitationId && data.message && data.senderId) {
-              // Save message to database
-              storage.createChat({
-                invitationId: parseInt(data.invitationId),
-                senderId: data.senderId,
-                message: data.message
-              }).then(() => {
-                // Broadcast to all clients in the invitation room
-                if (invitationRooms.has(data.invitationId)) {
-                  const clients = invitationRooms.get(data.invitationId)!;
-                  clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                      client.send(JSON.stringify({
-                        type: 'new_message',
-                        invitationId: data.invitationId,
-                        message: data.message,
-                        senderId: data.senderId,
-                        timestamp: new Date().toISOString()
-                      }));
-                    }
-                  });
-                }
-              });
-            }
+            // WebSocket messages are handled by API endpoint to avoid duplication
             break;
         }
       } catch (error) {
