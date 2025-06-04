@@ -9,7 +9,7 @@ import { MessageCircle, Calendar, MapPin, Star, Clock, Dumbbell } from "lucide-r
 import EnhancedBottomNavigation from "@/components/enhanced-bottom-navigation";
 import EnhancedHeader from "@/components/enhanced-header";
 import LoadingSkeleton from "@/components/loading-skeleton";
-import ModernChatInterface from "@/components/modern-chat-interface";
+import MatchesChatInterface from "@/components/matches-chat-interface";
 import { Link } from "wouter";
 import { formatTime, formatDate, getWorkoutEmoji } from "@/lib/utils";
 import type { WorkoutInvitation, User } from "@shared/schema";
@@ -37,28 +37,25 @@ export default function Matches() {
 
   // Filter for accepted invitations (matches)
   const matches = [
-    ...(invitationsData?.received || []).filter(inv => inv.status === 'accepted').map(inv => ({
+    ...(invitationsData?.received || []).filter((inv: any) => inv.status === 'accepted').map((inv: any) => ({
       ...inv,
-      otherUser: inv.fromUser
+      otherUser: inv.fromUser,
+      fromUser: inv.fromUser,
+      toUser: inv.toUser
     })),
-    ...(invitationsData?.sent || []).filter(inv => inv.status === 'accepted').map(inv => ({
+    ...(invitationsData?.sent || []).filter((inv: any) => inv.status === 'accepted').map((inv: any) => ({
       ...inv,
-      otherUser: inv.toUser
+      otherUser: inv.toUser,
+      fromUser: inv.fromUser,
+      toUser: inv.toUser
     }))
   ];
 
   // Show chat interface if match is selected
   if (selectedMatch) {
-    // Ensure proper data structure for chat interface
-    const chatInvitation = {
-      ...selectedMatch,
-      fromUser: selectedMatch.fromUser || selectedMatch.otherUser,
-      toUser: selectedMatch.toUser || (selectedMatch.fromUserId === authUser?.id ? selectedMatch.otherUser : authUser)
-    };
-    
     return (
-      <ModernChatInterface 
-        invitation={chatInvitation as any}
+      <MatchesChatInterface 
+        match={selectedMatch}
         onBack={() => setSelectedMatch(null)}
       />
     );
