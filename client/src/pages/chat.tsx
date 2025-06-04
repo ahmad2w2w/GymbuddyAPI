@@ -5,7 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, Phone, MoreVertical, MapPin, Clock, CheckCircle2, Check, CheckCheck } from "lucide-react";
+import { ArrowLeft, Send, Phone, MoreVertical, MapPin, Clock, CheckCircle2, Check, CheckCheck, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatTime, formatDate } from "@/lib/utils";
 import type { WorkoutInvitation, User, Chat } from "@shared/schema";
@@ -228,15 +228,26 @@ export default function ChatPage() {
               )}
             </div>
             {invitation.status === "accepted" && (
-              <Button 
-                size="sm" 
-                className="bg-green-600 hover:bg-green-700"
-                onClick={handleScheduleWorkout}
-                disabled={createWorkoutSessionMutation.isPending}
-              >
-                <CheckCircle2 className="w-4 h-4 mr-1" />
-                Plan Workout
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => setMessage("Laten we een workout plannen! Welke tijd past jou beter?")}
+                >
+                  <Calendar className="w-4 h-4 mr-1" />
+                  Plan Sessie
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="border-green-600 text-green-600 hover:bg-green-50"
+                  onClick={handleScheduleWorkout}
+                  disabled={createWorkoutSessionMutation.isPending}
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-1" />
+                  {createWorkoutSessionMutation.isPending ? "Bezig..." : "Bevestig"}
+                </Button>
+              </div>
             )}
           </div>
         </div>

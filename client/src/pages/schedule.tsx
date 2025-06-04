@@ -1,12 +1,19 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, MapPin, Users, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar, Clock, MapPin, Users, CheckCircle2, XCircle, AlertCircle, Plus, Dumbbell, Target, Timer } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
 import { formatTime, formatDate } from "@/lib/utils";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { WorkoutSession, WorkoutInvitation, User } from "@shared/schema";
 
 interface WorkoutSessionWithDetails extends WorkoutSession {
@@ -18,6 +25,15 @@ interface WorkoutSessionWithDetails extends WorkoutSession {
 
 export default function Schedule() {
   const { user: authUser } = useAuth();
+  const { toast } = useToast();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedTime, setSelectedTime] = useState("09:00");
+  const [workoutType, setWorkoutType] = useState("");
+  const [location, setLocation] = useState("");
+  const [duration, setDuration] = useState("60");
+  const [notes, setNotes] = useState("");
+  const [intensity, setIntensity] = useState("");
 
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["/api/users", authUser?.id, "workout-sessions"],
@@ -29,6 +45,64 @@ export default function Schedule() {
     },
     enabled: !!authUser?.id,
   });
+
+  const createWorkoutMutation = useMutation({
+    mutationFn: async (workoutData: any) => {
+      const scheduledTime = new Date(`${selectedDate}T${selectedTime}`).toISOString();
+      const response = await apiRequest("POST", "/api/workout-sessions", {
+        ...workoutData,
+        scheduledTime,
+        userId: authUser?.id,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Workout Gepland!",
+        description: "Je workout is succesvol toegevoegd aan je schema.",
+      });
+      setIsCreateDialogOpen(false);
+      resetForm();
+      queryClient.invalidateQueries({ queryKey: ["/api/users", authUser?.id, "workout-sessions"] });
+    },
+    onError: () => {
+      toast({
+        title: "Fout",
+        description: "Kon workout niet plannen. Probeer opnieuw.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetForm = () => {
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+    setSelectedTime("09:00");
+    setWorkoutType("");
+    setLocation("");
+    setDuration("60");
+    setNotes("");
+    setIntensity("");
+  };
+
+  const handleCreateWorkout = () => {
+    if (!workoutType || !location) {
+      toast({
+        title: "Vereiste velden",
+        description: "Vul minimaal workout type en locatie in.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createWorkoutMutation.mutate({
+      workoutType,
+      location,
+      duration: parseInt(duration),
+      notes,
+      intensity,
+      status: "scheduled",
+    });
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -61,6 +135,13 @@ export default function Schedule() {
   const pastSessions = sessions.filter(session => 
     new Date(session.scheduledTime) <= new Date() || session.status !== "scheduled"
   );
+
+  const getPartnerUser = (session: WorkoutSessionWithDetails) => {
+    if (!session.invitation) return null;
+    return session.invitation.fromUserId === authUser?.id 
+      ? session.invitation.toUser 
+      : session.invitation.fromUser;
+  };
 
   if (isLoading) {
     return (
@@ -114,16 +195,11 @@ export default function Schedule() {
                 <Card key={session.id} className="border-l-4 border-l-fitness-blue">
                   <CardContent className="p-4">
                     <div className="flex items-start space-x-4">
-                      <div 
-                        className="w-16 h-16 bg-cover bg-center rounded-lg flex-shrink-0"
-                        style={{ 
-                          backgroundImage: `url(${
-                            session.invitation.fromUserId === currentUser.id 
-                              ? session.invitation.toUser.profileImage 
-                              : session.invitation.fromUser.profileImage
-                          })` 
-                        }}
-                      />
+                      <div className="w-16 h-16 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <span className="text-white text-xl font-bold">
+                          {getPartnerUser(session)?.name?.charAt(0) || "W"}
+                        </span>
+                      </div>
                       
                       <div className="flex-1">
                         <div className="flex items-start justify-between mb-2">
