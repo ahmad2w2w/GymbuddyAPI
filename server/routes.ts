@@ -16,8 +16,210 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 
+// Session middleware setup
+declare module 'express-session' {
+  interface SessionData {
+    userId?: number;
+    sessionId?: string;
+  }
+}
+
+// Authentication middleware
+const requireAuth = async (req: any, res: any, next: any) => {
+  if (!req.session.userId || !req.session.sessionId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  // Verify session exists in database
+  const session = await storage.getSession(req.session.sessionId);
+  if (!session || session.expiresAt < new Date()) {
+    req.session.destroy(() => {});
+    return res.status(401).json({ error: "Session expired" });
+  }
+
+  next();
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // User routes
+  // Session configuration
+  app.use(session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false, // Set to true in production with HTTPS
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+  }));
+
+  // Authentication routes
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const userData = registerSchema.parse(req.body);
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(userData.email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(userData.password, 12);
+
+      // Create user
+      const user = await storage.createUser({
+        email: userData.email,
+        password: hashedPassword,
+        name: userData.name,
+        isProfileComplete: false
+      });
+
+      // Create session
+      const sessionId = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      await storage.createSession({
+        id: sessionId,
+        userId: user.id,
+        expiresAt
+      });
+
+      // Set session
+      req.session.userId = user.id;
+      req.session.sessionId = sessionId;
+
+      res.status(201).json({ 
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          name: user.name,
+          isProfileComplete: user.isProfileComplete 
+        } 
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const loginData = loginSchema.parse(req.body);
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(loginData.email);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Verify password
+      const isValidPassword = await bcrypt.compare(loginData.password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Delete existing sessions for this user
+      await storage.deleteUserSessions(user.id);
+
+      // Create new session
+      const sessionId = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      await storage.createSession({
+        id: sessionId,
+        userId: user.id,
+        expiresAt
+      });
+
+      // Set session
+      req.session.userId = user.id;
+      req.session.sessionId = sessionId;
+
+      res.json({ 
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          name: user.name,
+          isProfileComplete: user.isProfileComplete 
+        } 
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", requireAuth, async (req: any, res) => {
+    try {
+      if (req.session.sessionId) {
+        await storage.deleteSession(req.session.sessionId);
+      }
+      req.session.destroy(() => {
+        res.json({ message: "Logged out successfully" });
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: "Logout failed" });
+    }
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({ 
+        id: user.id, 
+        email: user.email, 
+        name: user.name,
+        isProfileComplete: user.isProfileComplete 
+      });
+    } catch (error) {
+      console.error("Get user error:", error);
+      res.status(500).json({ error: "Failed to get user" });
+    }
+  });
+
+  app.post("/api/auth/complete-profile", requireAuth, async (req: any, res) => {
+    try {
+      const profileData = profileSetupSchema.parse(req.body);
+      
+      const updatedUser = await storage.updateUser(req.session.userId, {
+        ...profileData,
+        isProfileComplete: true
+      });
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({ 
+        user: { 
+          id: updatedUser.id, 
+          email: updatedUser.email, 
+          name: updatedUser.name,
+          isProfileComplete: updatedUser.isProfileComplete 
+        } 
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid profile data", details: error.errors });
+      }
+      console.error("Profile completion error:", error);
+      res.status(500).json({ error: "Failed to complete profile" });
+    }
+  });
+
+  // User routes (protected)
   app.get("/api/users", async (req, res) => {
     try {
       const users = await storage.getAllUsers();
