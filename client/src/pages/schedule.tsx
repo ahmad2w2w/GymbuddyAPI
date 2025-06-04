@@ -145,7 +145,7 @@ export default function Schedule() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-fitness-light">
+      <div className="min-h-screen bg-gray-50">
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
@@ -158,19 +158,175 @@ export default function Schedule() {
   }
 
   return (
-    <div className="min-h-screen bg-fitness-light">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-4">
-        <h1 className="text-2xl font-bold text-fitness-dark">Mijn Schema</h1>
-        <p className="text-gray-600">Overzicht van geplande en voltooide workouts</p>
+      <header className="bg-white shadow-sm px-4 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Mijn Schema</h1>
+            <p className="text-gray-600">Overzicht van geplande en voltooide workouts</p>
+          </div>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Plan Workout
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Nieuwe Workout Plannen</DialogTitle>
+                <DialogDescription>
+                  Plan een persoonlijke workout sessie
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="date">Datum</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="time">Tijd</Label>
+                    <Input
+                      id="time"
+                      type="time"
+                      value={selectedTime}
+                      onChange={(e) => setSelectedTime(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="workoutType">Workout Type</Label>
+                  <Select value={workoutType} onValueChange={setWorkoutType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecteer workout type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Strength">Kracht Training</SelectItem>
+                      <SelectItem value="Cardio">Cardio</SelectItem>
+                      <SelectItem value="Yoga">Yoga</SelectItem>
+                      <SelectItem value="HIIT">HIIT</SelectItem>
+                      <SelectItem value="Pilates">Pilates</SelectItem>
+                      <SelectItem value="CrossFit">CrossFit</SelectItem>
+                      <SelectItem value="Swimming">Zwemmen</SelectItem>
+                      <SelectItem value="Running">Hardlopen</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="location">Locatie</Label>
+                  <Input
+                    id="location"
+                    placeholder="Bijv. Basic-Fit Utrecht, Vondelpark"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="duration">Duur (minuten)</Label>
+                    <Select value={duration} onValueChange={setDuration}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 min</SelectItem>
+                        <SelectItem value="45">45 min</SelectItem>
+                        <SelectItem value="60">60 min</SelectItem>
+                        <SelectItem value="90">90 min</SelectItem>
+                        <SelectItem value="120">120 min</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="intensity">Intensiteit</Label>
+                    <Select value={intensity} onValueChange={setIntensity}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecteer niveau" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Light">Licht</SelectItem>
+                        <SelectItem value="Moderate">Gemiddeld</SelectItem>
+                        <SelectItem value="Intense">Intensief</SelectItem>
+                        <SelectItem value="Extreme">Extreem</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="notes">Notities (optioneel)</Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Bijv. specifieke oefeningen, doelen, opmerkingen..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Annuleren
+                </Button>
+                <Button 
+                  onClick={handleCreateWorkout}
+                  disabled={createWorkoutMutation.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {createWorkoutMutation.isPending ? "Bezig..." : "Plan Workout"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
       {/* Main Content */}
-      <main className="px-4 py-4 pb-24">
+      <main className="px-4 py-6 pb-24">
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-4 text-center">
+              <Calendar className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-gray-900">{upcomingSessions.length}</div>
+              <p className="text-sm text-gray-600">Gepland</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-gray-900">
+                {pastSessions.filter(s => s.status === "completed").length}
+              </div>
+              <p className="text-sm text-gray-600">Voltooid</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <Target className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-gray-900">{sessions.length}</div>
+              <p className="text-sm text-gray-600">Totaal</p>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Upcoming Sessions */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-fitness-dark mb-4 flex items-center">
-            <Calendar className="w-5 h-5 mr-2" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Calendar className="w-5 h-5 mr-2 text-blue-600" />
             Aankomende Workouts ({upcomingSessions.length})
           </h2>
           
@@ -178,65 +334,77 @@ export default function Schedule() {
             <Card>
               <CardContent className="p-8 text-center">
                 <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-fitness-dark mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   Geen geplande workouts
                 </h3>
                 <p className="text-gray-600 mb-4">
-                  Accepteer uitnodigingen om workouts in te plannen
+                  Plan een nieuwe workout of accepteer uitnodigingen
                 </p>
-                <Button className="bg-fitness-blue hover:bg-blue-600">
-                  Zoek Trainingspartners
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => setIsCreateDialogOpen(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Plan Workout
                 </Button>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-4">
               {upcomingSessions.map((session) => (
-                <Card key={session.id} className="border-l-4 border-l-fitness-blue">
+                <Card key={session.id} className="border-l-4 border-l-blue-500">
                   <CardContent className="p-4">
                     <div className="flex items-start space-x-4">
-                      <div className="w-16 h-16 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-xl font-bold">
-                          {getPartnerUser(session)?.name?.charAt(0) || "W"}
-                        </span>
+                      <div className="w-16 h-16 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Dumbbell className="w-8 h-8 text-white" />
                       </div>
                       
                       <div className="flex-1">
                         <div className="flex items-start justify-between mb-2">
                           <div>
-                            <h3 className="font-semibold text-fitness-dark">
-                              {session.invitation.fromUserId === currentUser.id 
-                                ? session.invitation.toUser.name 
-                                : session.invitation.fromUser.name}
+                            <h3 className="font-semibold text-gray-900">
+                              {session.workoutType}
                             </h3>
-                            <div className="flex items-center text-sm text-gray-600 mt-1">
-                              <MapPin className="w-3 h-3 mr-1" />
-                              <span>{session.location}</span>
-                            </div>
+                            <p className="text-sm text-gray-600">
+                              {getPartnerUser(session)?.name && (
+                                <>Met {getPartnerUser(session)?.name}</>
+                              )}
+                            </p>
                           </div>
                           <Badge className={getStatusColor(session.status)}>
                             {getStatusIcon(session.status)}
                             <span className="ml-1">{getStatusText(session.status)}</span>
                           </Badge>
                         </div>
-
-                        <div className="mb-3">
-                          <div className="flex items-center text-sm text-gray-600 mb-1">
-                            <Clock className="w-3 h-3 mr-1" />
-                            <span>{session.workoutType}</span>
-                            <span className="mx-2">•</span>
-                            <span>{formatDate(new Date(session.scheduledTime))}</span>
-                            <span className="mx-2">•</span>
-                            <span>{formatTime(new Date(session.scheduledTime))}</span>
+                        
+                        <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <Clock className="w-4 h-4 mr-1" />
+                            {formatDate(new Date(session.scheduledTime))} om {formatTime(new Date(session.scheduledTime))}
+                          </div>
+                          <div className="flex items-center">
+                            <MapPin className="w-4 h-4 mr-1" />
+                            {session.location}
+                          </div>
+                          <div className="flex items-center">
+                            <Timer className="w-4 h-4 mr-1" />
+                            {session.duration || 60} minuten
+                          </div>
+                          <div className="flex items-center">
+                            <Target className="w-4 h-4 mr-1" />
+                            {session.intensity || "Gemiddeld"}
                           </div>
                         </div>
 
-                        <div className="flex space-x-2">
-                          <Button size="sm" className="bg-fitness-green hover:bg-green-600">
-                            Check-in
-                          </Button>
+                        {session.notes && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-700">{session.notes}</p>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 mt-4">
                           <Button size="sm" variant="outline">
-                            Details
+                            Bewerken
                           </Button>
                           <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700">
                             Annuleren
@@ -252,75 +420,43 @@ export default function Schedule() {
         </div>
 
         {/* Past Sessions */}
-        <div>
-          <h2 className="text-lg font-semibold text-fitness-dark mb-4 flex items-center">
-            <CheckCircle2 className="w-5 h-5 mr-2" />
-            Workout Geschiedenis ({pastSessions.length})
-          </h2>
-          
-          {pastSessions.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <CheckCircle2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-fitness-dark mb-2">
-                  Nog geen voltooide workouts
-                </h3>
-                <p className="text-gray-600">
-                  Je workout geschiedenis verschijnt hier
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
+        {pastSessions.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <CheckCircle2 className="w-5 h-5 mr-2 text-green-600" />
+              Workout Geschiedenis ({pastSessions.length})
+            </h2>
+            
             <div className="space-y-4">
-              {pastSessions.map((session) => (
+              {pastSessions.slice(0, 5).map((session) => (
                 <Card key={session.id} className="opacity-75">
                   <CardContent className="p-4">
-                    <div className="flex items-start space-x-4">
-                      <div 
-                        className="w-12 h-12 bg-cover bg-center rounded-lg flex-shrink-0"
-                        style={{ 
-                          backgroundImage: `url(${
-                            session.invitation.fromUserId === currentUser.id 
-                              ? session.invitation.toUser.profileImage 
-                              : session.invitation.fromUser.profileImage
-                          })` 
-                        }}
-                      />
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-gray-400 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Dumbbell className="w-6 h-6 text-white" />
+                      </div>
                       
                       <div className="flex-1">
-                        <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-medium text-fitness-dark">
-                              {session.invitation.fromUserId === currentUser.id 
-                                ? session.invitation.toUser.name 
-                                : session.invitation.fromUser.name}
-                            </h3>
-                            <div className="flex items-center text-sm text-gray-600 mt-1">
-                              <Clock className="w-3 h-3 mr-1" />
-                              <span>{session.workoutType}</span>
-                              <span className="mx-2">•</span>
-                              <span>{formatDate(new Date(session.scheduledTime))}</span>
-                            </div>
+                            <h3 className="font-medium text-gray-900">{session.workoutType}</h3>
+                            <p className="text-sm text-gray-600">
+                              {formatDate(new Date(session.scheduledTime))} • {session.location}
+                            </p>
                           </div>
                           <Badge className={getStatusColor(session.status)}>
                             {getStatusIcon(session.status)}
                             <span className="ml-1">{getStatusText(session.status)}</span>
                           </Badge>
                         </div>
-
-                        {session.status === "completed" && (
-                          <Button size="sm" variant="outline">
-                            Beoordeel Partner
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </main>
 
       <BottomNavigation currentPage="schedule" />
