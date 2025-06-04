@@ -330,7 +330,13 @@ export default function ProfileSetup() {
                 </div>
 
                 <Button 
-                  type="submit" 
+                  type="button"
+                  onClick={() => {
+                    console.log("Button clicked!");
+                    const formData = form.getValues();
+                    console.log("Form values:", formData);
+                    onSubmit(formData);
+                  }}
                   className="w-full bg-fitness-blue hover:bg-blue-600"
                   disabled={isCompletingProfile}
                 >
