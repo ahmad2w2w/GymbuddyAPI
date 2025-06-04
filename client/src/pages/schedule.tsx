@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,15 +17,17 @@ interface WorkoutSessionWithDetails extends WorkoutSession {
 }
 
 export default function Schedule() {
-  const [currentUser] = useState({ id: 1 }); // Mock current user ID
+  const { user: authUser } = useAuth();
 
   const { data: sessions = [], isLoading } = useQuery({
-    queryKey: ["/api/users", currentUser.id, "workout-sessions"],
+    queryKey: ["/api/users", authUser?.id, "workout-sessions"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${currentUser.id}/workout-sessions`);
+      if (!authUser?.id) throw new Error("No authenticated user");
+      const response = await fetch(`/api/users/${authUser.id}/workout-sessions`);
       if (!response.ok) throw new Error("Failed to fetch workout sessions");
       return response.json() as Promise<WorkoutSessionWithDetails[]>;
     },
+    enabled: !!authUser?.id,
   });
 
   const getStatusIcon = (status: string) => {

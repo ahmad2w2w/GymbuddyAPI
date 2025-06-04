@@ -18,16 +18,18 @@ interface InvitationWithUser extends WorkoutInvitation {
 }
 
 export default function Invitations() {
-  const [currentUser] = useState({ id: 1 }); // Mock current user ID
   const { toast } = useToast();
+  const { user: authUser } = useAuth();
 
   const { data: invitationsData, isLoading } = useQuery({
-    queryKey: ["/api/users", currentUser.id, "invitations"],
+    queryKey: ["/api/users", authUser?.id, "invitations"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${currentUser.id}/invitations`);
+      if (!authUser?.id) throw new Error("No authenticated user");
+      const response = await fetch(`/api/users/${authUser.id}/invitations`);
       if (!response.ok) throw new Error("Failed to fetch invitations");
       return response.json() as Promise<{ received: InvitationWithUser[], sent: InvitationWithUser[] }>;
     },
+    enabled: !!authUser?.id,
   });
 
   const updateStatusMutation = useMutation({
@@ -36,7 +38,7 @@ export default function Invitations() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users", currentUser.id, "invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", authUser?.id, "invitations"] });
     },
     onError: () => {
       toast({

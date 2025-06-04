@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,15 +13,17 @@ interface MatchWithUser extends Match {
 }
 
 export default function Matches() {
-  const currentUser = { id: 1 }; // Mock current user ID
+  const { user: authUser } = useAuth();
 
   const { data: matches = [], isLoading } = useQuery({
-    queryKey: ["/api/users", currentUser.id, "matches"],
+    queryKey: ["/api/users", authUser?.id, "matches"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${currentUser.id}/matches`);
+      if (!authUser?.id) throw new Error("No authenticated user");
+      const response = await fetch(`/api/users/${authUser.id}/matches`);
       if (!response.ok) throw new Error("Failed to fetch matches");
       return response.json() as Promise<MatchWithUser[]>;
     },
+    enabled: !!authUser?.id,
   });
 
   if (isLoading) {
