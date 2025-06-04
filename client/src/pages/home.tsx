@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Bell, MapPin, ChevronDown, Sliders, Star, MessageCircle, Phone, Clock, Users } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
+import LocationFilter, { type LocationFilters } from "@/components/location-filter";
 import { useToast } from "@/hooks/use-toast";
 import { FaWhatsapp } from "react-icons/fa";
 import type { User } from "@shared/schema";
@@ -13,6 +14,15 @@ import type { User } from "@shared/schema";
 export default function Home() {
   const [currentUser] = useState({ id: 1 }); // Mock current user ID
   const [selectedFilters, setSelectedFilters] = useState(["Now Available"]);
+  const [showLocationFilter, setShowLocationFilter] = useState(false);
+  const [locationFilters, setLocationFilters] = useState<LocationFilters>({
+    maxDistance: 5,
+    location: "All Locations",
+    timeSlot: "All Times",
+    workoutType: "All Types",
+    experienceLevel: "All Levels",
+    availableNow: false,
+  });
   const { toast } = useToast();
 
   const { data: availableUsers = [], isLoading } = useQuery({
@@ -35,9 +45,33 @@ export default function Home() {
   const workoutTypes = ["Strength", "Cardio", "Yoga", "Outdoor", "Swimming"];
 
   const filteredUsers = availableUsers.filter((user: User) => {
+    // Basic filters
     if (selectedFilters.includes("Now Available") && !user.availableNow) {
       return false;
     }
+
+    // Location filter
+    if (locationFilters.location !== "All Locations" && user.location !== locationFilters.location) {
+      return false;
+    }
+
+    // Workout type filter
+    if (locationFilters.workoutType !== "All Types" && 
+        !user.preferredWorkouts?.includes(locationFilters.workoutType)) {
+      return false;
+    }
+
+    // Experience level filter
+    if (locationFilters.experienceLevel !== "All Levels" && 
+        user.experienceLevel !== locationFilters.experienceLevel) {
+      return false;
+    }
+
+    // Available now filter
+    if (locationFilters.availableNow && !user.availableNow) {
+      return false;
+    }
+
     return true;
   });
 
@@ -131,6 +165,15 @@ export default function Home() {
               {filter}
             </Button>
           ))}
+          <Button
+            variant="outline"
+            size="sm"
+            className="whitespace-nowrap bg-white text-fitness-dark border-gray-200"
+            onClick={() => setShowLocationFilter(true)}
+          >
+            <Sliders className="w-4 h-4 mr-1" />
+            Meer Filters
+          </Button>
         </div>
       </div>
 
@@ -247,6 +290,14 @@ export default function Home() {
       >
         <Sliders className="w-5 h-5 text-white" />
       </Button>
+
+      {/* Location Filter Modal */}
+      {showLocationFilter && (
+        <LocationFilter
+          onFilterChange={setLocationFilters}
+          onClose={() => setShowLocationFilter(false)}
+        />
+      )}
 
       {/* Bottom Navigation */}
       <BottomNavigation currentPage="discover" />
