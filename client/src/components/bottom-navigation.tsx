@@ -19,9 +19,9 @@ export default function BottomNavigation({ currentPage }: BottomNavigationProps)
     },
     {
       id: "matches",
-      label: "Matches",
+      label: "Invitations",
       icon: MessageCircle,
-      path: "/matches",
+      path: "/invitations",
       hasNotification: true,
       notificationCount: 3,
     },

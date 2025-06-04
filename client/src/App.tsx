@@ -5,7 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
 import ProfileSetup from "@/pages/profile-setup";
-import Matches from "@/pages/matches";
+import Invitations from "@/pages/invitations";
+import Schedule from "@/pages/schedule";
+import Profile from "@/pages/profile";
 import Chat from "@/pages/chat";
 import NotFound from "@/pages/not-found";
 
@@ -14,8 +16,10 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/setup" component={ProfileSetup} />
-      <Route path="/matches" component={Matches} />
-      <Route path="/chat/:matchId" component={Chat} />
+      <Route path="/invitations" component={Invitations} />
+      <Route path="/schedule" component={Schedule} />
+      <Route path="/profile" component={Profile} />
+      <Route path="/chat/:invitationId" component={Chat} />
       <Route component={NotFound} />
     </Switch>
   );
