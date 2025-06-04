@@ -90,6 +90,7 @@ export function useWebSocket() {
     isConnected,
     sendMessage,
     joinInvitation,
+    joinInvitationRoom: joinInvitation,
     sendChatMessage
   };
 }

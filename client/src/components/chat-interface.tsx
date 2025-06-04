@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Send, ArrowLeft } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Send, ArrowLeft, Clock, CheckCheck, Circle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { formatTime } from "@/lib/utils";
+import { formatTime, formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { Chat, WorkoutInvitation, User } from "@shared/schema";
 
 interface ChatInterfaceProps {
