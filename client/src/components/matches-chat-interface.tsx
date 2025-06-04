@@ -130,14 +130,14 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
       <div
         key={msg.id}
         className={cn(
-          "flex items-end gap-2 mb-1",
+          "flex items-end gap-2 mb-3 animate-fadeIn",
           isOwn ? "justify-end" : "justify-start"
         )}
       >
         {!isOwn && isLastInGroup && (
-          <Avatar className="w-8 h-8 mb-1">
+          <Avatar className="w-8 h-8 mb-1 ring-2 ring-white shadow-md">
             <AvatarImage src={otherUser.profileImage || undefined} />
-            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs">
+            <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-600 text-white text-xs font-semibold">
               {otherUser.name?.charAt(0) || "?"}
             </AvatarFallback>
           </Avatar>
@@ -145,33 +145,70 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
         
         {!isOwn && !isLastInGroup && <div className="w-8" />}
         
-        <div
-          className={cn(
-            "relative max-w-[80%] sm:max-w-[70%] px-4 py-2 shadow-sm",
-            isOwn
-              ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
-              : "bg-white border border-gray-100",
-            isFirstInGroup && isOwn && "rounded-t-2xl rounded-bl-2xl rounded-br-md",
-            isLastInGroup && isOwn && "rounded-b-2xl rounded-tl-2xl rounded-tr-md",
-            !isFirstInGroup && !isLastInGroup && isOwn && "rounded-l-2xl rounded-r-md",
-            isFirstInGroup && isLastInGroup && isOwn && "rounded-2xl",
-            isFirstInGroup && !isOwn && "rounded-t-2xl rounded-br-2xl rounded-bl-md",
-            isLastInGroup && !isOwn && "rounded-b-2xl rounded-tr-2xl rounded-tl-md",
-            !isFirstInGroup && !isLastInGroup && !isOwn && "rounded-r-2xl rounded-l-md",
-            isFirstInGroup && isLastInGroup && !isOwn && "rounded-2xl"
-          )}
-        >
-          <p className="text-sm leading-relaxed">{msg.message}</p>
-          {isLastInGroup && (
-            <div className={cn(
-              "flex items-center gap-1 mt-1 text-xs",
-              isOwn ? "text-blue-100 justify-end" : "text-gray-500"
+        <div className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
+          <div
+            className={cn(
+              "relative px-4 py-3 shadow-lg animate-messageSlide",
+              "max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg",
+              isOwn
+                ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white"
+                : "bg-gradient-to-br from-white via-gray-50 to-gray-100 border border-gray-200 text-gray-800",
+              // Modern bubble styling with proper tails
+              isOwn
+                ? "rounded-2xl rounded-br-md" 
+                : "rounded-2xl rounded-bl-md",
+              // Enhanced hover and interaction effects
+              "hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 hover:scale-105",
+              "cursor-pointer group"
+            )}
+            style={{
+              // CSS custom properties for advanced bubble effects
+              filter: isOwn 
+                ? "drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3))" 
+                : "drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1))"
+            }}
+          >
+            {/* Bubble tail using CSS pseudo-elements */}
+            <div
+              className={cn(
+                "absolute w-0 h-0",
+                isOwn
+                  ? "bottom-0 right-0 translate-x-1 translate-y-1" 
+                  : "bottom-0 left-0 -translate-x-1 translate-y-1"
+              )}
+              style={{
+                borderLeft: isOwn ? "8px solid transparent" : "8px solid #f3f4f6",
+                borderRight: isOwn ? "8px solid #4f46e5" : "8px solid transparent",
+                borderTop: "8px solid transparent"
+              }}
+            />
+            
+            <p className={cn(
+              "text-sm leading-relaxed font-medium",
+              isOwn ? "text-white" : "text-gray-800"
             )}>
-              <Clock className="w-3 h-3" />
-              <span>{formatTime(new Date(msg.sentAt || new Date()))}</span>
-              {isOwn && <CheckCheck className="w-3 h-3" />}
-            </div>
-          )}
+              {msg.message}
+            </p>
+            
+            {/* Message status and timestamp */}
+            {isLastInGroup && (
+              <div className={cn(
+                "flex items-center gap-1 mt-2 text-xs opacity-70 group-hover:opacity-100 transition-opacity",
+                isOwn ? "text-blue-100 justify-end" : "text-gray-500 justify-start"
+              )}>
+                <Clock className="w-3 h-3" />
+                <span className="font-medium">
+                  {formatTime(new Date(msg.sentAt || new Date()))}
+                </span>
+                {isOwn && (
+                  <CheckCheck className={cn(
+                    "w-3 h-3 ml-1",
+                    "text-green-300 animate-pulse"
+                  )} />
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
