@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, MapPin, CheckCircle, XCircle, MessageCircle, Calendar } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
-import ChatInterface from "@/components/chat-interface";
+import ModernChatInterface from "@/components/modern-chat-interface";
 import { useToast } from "@/hooks/use-toast";
 import { formatTime, formatDate } from "@/lib/utils";
 import type { WorkoutInvitation, User } from "@shared/schema";
