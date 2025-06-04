@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,11 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Clock, MapPin, CheckCircle, XCircle, MessageCircle, Calendar } from "lucide-react";
+import { Clock, MapPin, CheckCircle, XCircle, Calendar, MessageSquare, ArrowRight } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
-import ModernChatInterface from "@/components/modern-chat-interface";
 import { useToast } from "@/hooks/use-toast";
 import { formatTime, formatDate } from "@/lib/utils";
+import { Link } from "wouter";
 import type { WorkoutInvitation, User } from "@shared/schema";
 
 interface InvitationWithUser extends WorkoutInvitation {
@@ -22,7 +21,6 @@ interface InvitationWithUser extends WorkoutInvitation {
 export default function Invitations() {
   const { toast } = useToast();
   const { user: authUser } = useAuth();
-  const [selectedInvitation, setSelectedInvitation] = useState<InvitationWithUser | null>(null);
   
   // Initialize WebSocket for real-time updates
   useWebSocket();
@@ -59,7 +57,7 @@ export default function Invitations() {
     updateStatusMutation.mutate({ invitationId, status: "accepted" });
     toast({
       title: "Uitnodiging geaccepteerd!",
-      description: "Je kunt nu chatten om details af te spreken.",
+      description: "Ga naar Matches om te chatten.",
     });
   };
 
@@ -87,24 +85,13 @@ export default function Invitations() {
     }
   };
 
-  // Show chat interface if invitation is selected
-  if (selectedInvitation) {
-    return (
-      <ModernChatInterface 
-        invitation={selectedInvitation as any}
-        onBack={() => setSelectedInvitation(null)}
-      />
-    );
-  }
-
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-fitness-light">
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-gray-600">Uitnodigingen laden...</p>
-          </div>
+      <div className="min-h-screen bg-gray-50">
+        <div className="animate-pulse p-4 space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="bg-white rounded-lg h-24"></div>
+          ))}
         </div>
         <BottomNavigation currentPage="matches" />
       </div>
@@ -115,21 +102,19 @@ export default function Invitations() {
   const sentInvitations = invitationsData?.sent || [];
 
   return (
-    <div className="min-h-screen bg-fitness-light">
-      {/* Header */}
-      <header className="bg-white shadow-sm px-4 py-4">
-        <h1 className="text-2xl font-bold text-fitness-dark">Uitnodigingen</h1>
-        <p className="text-gray-600">Beheer je workout uitnodigingen</p>
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow-sm border-b px-4 py-4">
+        <h1 className="text-xl font-semibold text-gray-900">Uitnodigingen</h1>
+        <p className="text-sm text-gray-600">Beheer je workout uitnodigingen</p>
       </header>
 
-      {/* Main Content */}
-      <main className="px-4 py-4 pb-24">
+      <main className="flex-1 p-4">
         <Tabs defaultValue="received" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="received">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="received" className="flex items-center gap-2">
               Ontvangen ({receivedInvitations.length})
             </TabsTrigger>
-            <TabsTrigger value="sent">
+            <TabsTrigger value="sent" className="flex items-center gap-2">
               Verstuurd ({sentInvitations.length})
             </TabsTrigger>
           </TabsList>
@@ -138,11 +123,11 @@ export default function Invitations() {
             {receivedInvitations.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-fitness-dark mb-2">
-                  Geen ontvangen uitnodigingen
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Geen nieuwe uitnodigingen
                 </h3>
                 <p className="text-gray-600">
-                  Nieuwe uitnodigingen verschijnen hier
+                  Workout uitnodigingen verschijnen hier
                 </p>
               </div>
             ) : (
@@ -150,15 +135,16 @@ export default function Invitations() {
                 <Card key={invitation.id} className="overflow-hidden">
                   <CardContent className="p-4">
                     <div className="flex items-start space-x-4">
-                      <div 
-                        className="w-16 h-16 bg-cover bg-center rounded-lg flex-shrink-0"
-                        style={{ backgroundImage: `url(${invitation.fromUser?.profileImage})` }}
-                      />
+                      <div className="w-16 h-16 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
+                        <span className="text-2xl font-bold text-gray-500">
+                          {invitation.fromUser?.name?.charAt(0) || "?"}
+                        </span>
+                      </div>
                       
                       <div className="flex-1">
                         <div className="flex items-start justify-between mb-2">
                           <div>
-                            <h3 className="font-semibold text-fitness-dark">
+                            <h3 className="font-semibold text-gray-900">
                               {invitation.fromUser?.name}
                             </h3>
                             <div className="flex items-center text-sm text-gray-600 mt-1">
@@ -190,10 +176,10 @@ export default function Invitations() {
                         </div>
 
                         {invitation.status === "pending" && (
-                          <div className="flex space-x-2">
+                          <div className="flex gap-2">
                             <Button 
                               size="sm" 
-                              className="bg-fitness-green hover:bg-green-600"
+                              className="bg-green-500 hover:bg-green-600"
                               onClick={() => handleAccept(invitation.id)}
                               disabled={updateStatusMutation.isPending}
                             >
@@ -213,14 +199,16 @@ export default function Invitations() {
                         )}
 
                         {invitation.status === "accepted" && (
-                          <Button 
-                            size="sm" 
-                            className="bg-fitness-blue hover:bg-blue-600"
-                            onClick={() => setSelectedInvitation(invitation)}
-                          >
-                            <MessageCircle className="w-4 h-4 mr-1" />
-                            Chat Starten
-                          </Button>
+                          <Link href="/matches">
+                            <Button 
+                              size="sm" 
+                              className="bg-blue-500 hover:bg-blue-600"
+                            >
+                              <MessageSquare className="w-4 h-4 mr-1" />
+                              Ga naar Matches
+                              <ArrowRight className="w-4 h-4 ml-1" />
+                            </Button>
+                          </Link>
                         )}
                       </div>
                     </div>
@@ -234,7 +222,7 @@ export default function Invitations() {
             {sentInvitations.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-fitness-dark mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   Geen verstuurde uitnodigingen
                 </h3>
                 <p className="text-gray-600">
@@ -246,15 +234,16 @@ export default function Invitations() {
                 <Card key={invitation.id} className="overflow-hidden">
                   <CardContent className="p-4">
                     <div className="flex items-start space-x-4">
-                      <div 
-                        className="w-16 h-16 bg-cover bg-center rounded-lg flex-shrink-0"
-                        style={{ backgroundImage: `url(${invitation.toUser?.profileImage})` }}
-                      />
+                      <div className="w-16 h-16 bg-gray-200 rounded-lg flex-shrink-0 flex items-center justify-center">
+                        <span className="text-2xl font-bold text-gray-500">
+                          {invitation.toUser?.name?.charAt(0) || "?"}
+                        </span>
+                      </div>
                       
                       <div className="flex-1">
                         <div className="flex items-start justify-between mb-2">
                           <div>
-                            <h3 className="font-semibold text-fitness-dark">
+                            <h3 className="font-semibold text-gray-900">
                               {invitation.toUser?.name}
                             </h3>
                             <div className="flex items-center text-sm text-gray-600 mt-1">
@@ -286,14 +275,16 @@ export default function Invitations() {
                         </div>
 
                         {invitation.status === "accepted" && (
-                          <Button 
-                            size="sm" 
-                            className="bg-fitness-blue hover:bg-blue-600"
-                            onClick={() => setSelectedInvitation(invitation)}
-                          >
-                            <MessageCircle className="w-4 h-4 mr-1" />
-                            Chat Starten
-                          </Button>
+                          <Link href="/matches">
+                            <Button 
+                              size="sm" 
+                              className="bg-blue-500 hover:bg-blue-600"
+                            >
+                              <MessageSquare className="w-4 h-4 mr-1" />
+                              Ga naar Matches
+                              <ArrowRight className="w-4 h-4 ml-1" />
+                            </Button>
+                          </Link>
                         )}
                       </div>
                     </div>
