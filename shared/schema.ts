@@ -4,13 +4,15 @@ import { z } from "zod";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  age: integer("age").notNull(),
+  email: text("email").unique().notNull(),
+  password: text("password").notNull(),
+  name: text("name"),
+  age: integer("age"),
   bio: text("bio"),
   profileImage: text("profile_image"),
-  location: text("location").notNull(),
-  experienceLevel: text("experience_level").notNull(), // Beginner, Intermediate, Advanced
-  preferredWorkouts: text("preferred_workouts").array().notNull(), // Strength, Cardio, Yoga, etc.
+  location: text("location"),
+  experienceLevel: text("experience_level"), // Beginner, Intermediate, Advanced
+  preferredWorkouts: text("preferred_workouts").array(), // Strength, Cardio, Yoga, etc.
   availableNow: boolean("available_now").default(false),
   preferredTimeSlots: text("preferred_time_slots").array(), // Morning, Afternoon, Evening, etc.
   workoutDuration: text("workout_duration"), // 30-45 mins, 60-90 mins, etc.
@@ -19,6 +21,8 @@ export const users = pgTable("users", {
   longitude: text("longitude"),
   rating: text("rating").default("5.0").notNull(),
   workoutCount: integer("workout_count").default(0).notNull(),
+  isProfileComplete: boolean("is_profile_complete").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const workoutInvitations = pgTable("workout_invitations", {
@@ -51,10 +55,52 @@ export const workoutSessions = pgTable("workout_sessions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Sessions table for authentication
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Authentication schemas
+export const registerSchema = z.object({
+  email: z.string().email("Ongeldig email adres"),
+  password: z.string().min(8, "Wachtwoord moet minimaal 8 karakters bevatten"),
+  confirmPassword: z.string(),
+  name: z.string().min(2, "Naam moet minimaal 2 karakters bevatten"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Wachtwoorden komen niet overeen",
+  path: ["confirmPassword"],
+});
+
+export const loginSchema = z.object({
+  email: z.string().email("Ongeldig email adres"),
+  password: z.string().min(1, "Wachtwoord is verplicht"),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   rating: true,
   workoutCount: true,
+  createdAt: true,
+  isProfileComplete: true,
+});
+
+export const profileSetupSchema = createInsertSchema(users).omit({
+  id: true,
+  email: true,
+  password: true,
+  rating: true,
+  workoutCount: true,
+  createdAt: true,
+  isProfileComplete: true,
+}).extend({
+  name: z.string().min(2, "Naam is verplicht"),
+  age: z.number().min(16, "Je moet minimaal 16 jaar oud zijn").max(99, "Ongeldige leeftijd"),
+  location: z.string().min(1, "Locatie is verplicht"),
+  experienceLevel: z.string().min(1, "Ervaring niveau is verplicht"),
+  preferredWorkouts: z.array(z.string()).min(1, "Selecteer minimaal één workout type"),
 });
 
 export const insertWorkoutInvitationSchema = createInsertSchema(workoutInvitations).omit({
@@ -72,11 +118,20 @@ export const insertWorkoutSessionSchema = createInsertSchema(workoutSessions).om
   createdAt: true,
 });
 
+export const insertSessionSchema = createInsertSchema(sessions).omit({
+  createdAt: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type RegisterUser = z.infer<typeof registerSchema>;
+export type LoginUser = z.infer<typeof loginSchema>;
+export type ProfileSetup = z.infer<typeof profileSetupSchema>;
 export type WorkoutInvitation = typeof workoutInvitations.$inferSelect;
 export type InsertWorkoutInvitation = z.infer<typeof insertWorkoutInvitationSchema>;
 export type Chat = typeof chats.$inferSelect;
 export type InsertChat = z.infer<typeof insertChatSchema>;
 export type WorkoutSession = typeof workoutSessions.$inferSelect;
 export type InsertWorkoutSession = z.infer<typeof insertWorkoutSessionSchema>;
+export type Session = typeof sessions.$inferSelect;
+export type InsertSession = z.infer<typeof insertSessionSchema>;

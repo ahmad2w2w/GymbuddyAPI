@@ -1,8 +1,19 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import session from "express-session";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { storage } from "./storage";
-import { insertUserSchema, insertWorkoutInvitationSchema, insertChatSchema, insertWorkoutSessionSchema } from "@shared/schema";
+import { 
+  insertUserSchema, 
+  insertWorkoutInvitationSchema, 
+  insertChatSchema, 
+  insertWorkoutSessionSchema,
+  registerSchema,
+  loginSchema,
+  profileSetupSchema
+} from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
