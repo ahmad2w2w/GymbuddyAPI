@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertMatchSchema, insertChatSchema } from "@shared/schema";
+import { insertUserSchema, insertWorkoutInvitationSchema, insertChatSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -58,7 +58,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get potential matches for a user
+  // Get available workout partners for a user
   app.get("/api/users/:id/potential-matches", async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
@@ -69,63 +69,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get users in the same location
       const nearbyUsers = await storage.getUsersNearLocation(user.location, userId);
-      
-      // Filter out users already matched with
-      const existingMatches = await storage.getMatchesForUser(userId);
-      const matchedUserIds = existingMatches.map(match => 
-        match.user1Id === userId ? match.user2Id : match.user1Id
-      );
-
-      const potentialMatches = nearbyUsers.filter(u => !matchedUserIds.includes(u.id));
-      res.json(potentialMatches);
+      res.json(nearbyUsers);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch potential matches" });
+      res.status(500).json({ error: "Failed to fetch available users" });
     }
   });
 
-  // Match routes
-  app.post("/api/matches", async (req, res) => {
+  // Workout invitation routes
+  app.post("/api/invitations", async (req, res) => {
     try {
-      const matchData = insertMatchSchema.parse(req.body);
-      
-      // Check if match already exists
-      const existingMatch = await storage.getMatch(matchData.user1Id, matchData.user2Id);
-      if (existingMatch) {
-        // If the other user already liked this user, it's a mutual match
-        if (existingMatch.status === "pending" && existingMatch.user1Id === matchData.user2Id) {
-          const updatedMatch = await storage.updateMatchStatus(existingMatch.id, "accepted");
-          return res.json({ ...updatedMatch, mutual: true });
-        }
-        return res.status(400).json({ error: "Match already exists" });
-      }
-
-      const match = await storage.createMatch(matchData);
-      res.status(201).json({ ...match, mutual: false });
+      const invitationData = insertWorkoutInvitationSchema.parse(req.body);
+      const invitation = await storage.createWorkoutInvitation(invitationData);
+      res.status(201).json(invitation);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid match data", details: error.errors });
+        return res.status(400).json({ error: "Invalid invitation data", details: error.errors });
       }
-      res.status(500).json({ error: "Failed to create match" });
+      res.status(500).json({ error: "Failed to create invitation" });
     }
   });
 
-  app.get("/api/users/:id/matches", async (req, res) => {
+  app.get("/api/users/:id/invitations", async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
-      const matches = await storage.getMutualMatches(userId);
+      const receivedInvitations = await storage.getInvitationsForUser(userId);
+      const sentInvitations = await storage.getInvitationsSentByUser(userId);
       
-      // Get user details for each match
-      const matchesWithUsers = await Promise.all(
-        matches.map(async (match) => {
-          const otherUserId = match.user1Id === userId ? match.user2Id : match.user1Id;
-          const otherUser = await storage.getUser(otherUserId);
-          return { ...match, otherUser };
+      // Get user details for each invitation
+      const enrichedReceived = await Promise.all(
+        receivedInvitations.map(async (invitation) => {
+          const fromUser = await storage.getUser(invitation.fromUserId);
+          return { ...invitation, fromUser };
         })
       );
 
-      res.json(matchesWithUsers);
+      const enrichedSent = await Promise.all(
+        sentInvitations.map(async (invitation) => {
+          const toUser = await storage.getUser(invitation.toUserId);
+          return { ...invitation, toUser };
+        })
+      );
+
+      res.json({ received: enrichedReceived, sent: enrichedSent });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch matches" });
+      res.status(500).json({ error: "Failed to fetch invitations" });
+    }
+  });
+
+  app.put("/api/invitations/:id/status", async (req, res) => {
+    try {
+      const invitationId = parseInt(req.params.id);
+      const { status } = req.body;
+      
+      if (!["accepted", "declined"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+
+      const invitation = await storage.updateInvitationStatus(invitationId, status);
+      if (!invitation) {
+        return res.status(404).json({ error: "Invitation not found" });
+      }
+      
+      res.json(invitation);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update invitation status" });
     }
   });
 

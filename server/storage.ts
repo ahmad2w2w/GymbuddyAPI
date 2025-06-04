@@ -1,12 +1,12 @@
 import { 
   users, 
-  matches, 
+  workoutInvitations, 
   chats, 
   workoutSessions,
   type User, 
   type InsertUser,
-  type Match,
-  type InsertMatch,
+  type WorkoutInvitation,
+  type InsertWorkoutInvitation,
   type Chat,
   type InsertChat,
   type WorkoutSession,
@@ -24,16 +24,16 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   getUsersNearLocation(location: string, excludeUserId?: number): Promise<User[]>;
 
-  // Match operations
-  createMatch(match: InsertMatch): Promise<Match>;
-  getMatchesForUser(userId: number): Promise<Match[]>;
-  getMatch(user1Id: number, user2Id: number): Promise<Match | undefined>;
-  updateMatchStatus(matchId: number, status: string): Promise<Match | undefined>;
-  getMutualMatches(userId: number): Promise<Match[]>;
+  // Workout invitation operations
+  createWorkoutInvitation(invitation: InsertWorkoutInvitation): Promise<WorkoutInvitation>;
+  getInvitationsForUser(userId: number): Promise<WorkoutInvitation[]>;
+  getInvitationsSentByUser(userId: number): Promise<WorkoutInvitation[]>;
+  updateInvitationStatus(invitationId: number, status: string): Promise<WorkoutInvitation | undefined>;
+  getInvitation(id: number): Promise<WorkoutInvitation | undefined>;
 
   // Chat operations
   createChat(chat: InsertChat): Promise<Chat>;
-  getChatsForMatch(matchId: number): Promise<Chat[]>;
+  getChatsForInvitation(invitationId: number): Promise<Chat[]>;
 
   // Workout session operations
   createWorkoutSession(session: InsertWorkoutSession): Promise<WorkoutSession>;
@@ -83,49 +83,43 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users).where(eq(users.location, location));
   }
 
-  async createMatch(insertMatch: InsertMatch): Promise<Match> {
-    const [match] = await db
-      .insert(matches)
-      .values(insertMatch)
+  async createWorkoutInvitation(insertInvitation: InsertWorkoutInvitation): Promise<WorkoutInvitation> {
+    const [invitation] = await db
+      .insert(workoutInvitations)
+      .values(insertInvitation)
       .returning();
-    return match;
+    return invitation;
   }
 
-  async getMatchesForUser(userId: number): Promise<Match[]> {
+  async getInvitationsForUser(userId: number): Promise<WorkoutInvitation[]> {
     return await db
       .select()
-      .from(matches)
-      .where(eq(matches.user1Id, userId) || eq(matches.user2Id, userId));
+      .from(workoutInvitations)
+      .where(eq(workoutInvitations.toUserId, userId));
   }
 
-  async getMatch(user1Id: number, user2Id: number): Promise<Match | undefined> {
-    const [match] = await db
+  async getInvitationsSentByUser(userId: number): Promise<WorkoutInvitation[]> {
+    return await db
       .select()
-      .from(matches)
-      .where(
-        (eq(matches.user1Id, user1Id) && eq(matches.user2Id, user2Id)) ||
-        (eq(matches.user1Id, user2Id) && eq(matches.user2Id, user1Id))
-      );
-    return match || undefined;
+      .from(workoutInvitations)
+      .where(eq(workoutInvitations.fromUserId, userId));
   }
 
-  async updateMatchStatus(matchId: number, status: string): Promise<Match | undefined> {
-    const [match] = await db
-      .update(matches)
+  async updateInvitationStatus(invitationId: number, status: string): Promise<WorkoutInvitation | undefined> {
+    const [invitation] = await db
+      .update(workoutInvitations)
       .set({ status })
-      .where(eq(matches.id, matchId))
+      .where(eq(workoutInvitations.id, invitationId))
       .returning();
-    return match || undefined;
+    return invitation || undefined;
   }
 
-  async getMutualMatches(userId: number): Promise<Match[]> {
-    return await db
+  async getInvitation(id: number): Promise<WorkoutInvitation | undefined> {
+    const [invitation] = await db
       .select()
-      .from(matches)
-      .where(
-        (eq(matches.user1Id, userId) || eq(matches.user2Id, userId)) &&
-        eq(matches.status, "accepted")
-      );
+      .from(workoutInvitations)
+      .where(eq(workoutInvitations.id, id));
+    return invitation || undefined;
   }
 
   async createChat(insertChat: InsertChat): Promise<Chat> {
@@ -136,11 +130,11 @@ export class DatabaseStorage implements IStorage {
     return chat;
   }
 
-  async getChatsForMatch(matchId: number): Promise<Chat[]> {
+  async getChatsForInvitation(invitationId: number): Promise<Chat[]> {
     return await db
       .select()
       .from(chats)
-      .where(eq(chats.matchId, matchId))
+      .where(eq(chats.invitationId, invitationId))
       .orderBy(chats.sentAt);
   }
 
@@ -153,15 +147,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWorkoutSessionsForUser(userId: number): Promise<WorkoutSession[]> {
-    const userMatches = await this.getMatchesForUser(userId);
-    const matchIds = userMatches.map(match => match.id);
+    const sentInvitations = await this.getInvitationsSentByUser(userId);
+    const receivedInvitations = await this.getInvitationsForUser(userId);
+    const allInvitations = [...sentInvitations, ...receivedInvitations];
+    const invitationIds = allInvitations.map(invitation => invitation.id);
     
-    if (matchIds.length === 0) return [];
+    if (invitationIds.length === 0) return [];
     
     return await db
       .select()
       .from(workoutSessions)
-      .where(inArray(workoutSessions.matchId, matchIds));
+      .where(inArray(workoutSessions.invitationId, invitationIds));
   }
 
   async updateWorkoutSessionStatus(sessionId: number, status: string): Promise<WorkoutSession | undefined> {
