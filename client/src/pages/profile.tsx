@@ -26,20 +26,21 @@ const durations = ["30-45 mins", "45-60 mins", "60-90 mins", "90-120 mins", "2+ 
 const locations = ["Downtown Gym", "Westside Fitness", "East Coast Gym", "Central Park", "Local Gym"];
 
 export default function Profile() {
-  const [currentUser] = useState({ id: 1 });
   const [isEditing, setIsEditing] = useState(false);
   const [selectedWorkouts, setSelectedWorkouts] = useState<string[]>([]);
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
   const { toast } = useToast();
-  const { logout, isLoggingOut } = useAuth();
+  const { user: authUser, logout, isLoggingOut } = useAuth();
 
   const { data: user, isLoading } = useQuery({
-    queryKey: ["/api/users", currentUser.id],
+    queryKey: ["/api/users", authUser?.id],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${currentUser.id}`);
+      if (!authUser?.id) throw new Error("No authenticated user");
+      const response = await fetch(`/api/users/${authUser.id}`);
       if (!response.ok) throw new Error("Failed to fetch user");
       return response.json();
     },
+    enabled: !!authUser?.id,
   });
 
   const form = useForm<InsertUser>({
@@ -60,7 +61,8 @@ export default function Profile() {
 
   const updateUserMutation = useMutation({
     mutationFn: async (userData: Partial<InsertUser>) => {
-      const response = await apiRequest("PUT", `/api/users/${currentUser.id}`, userData);
+      if (!authUser?.id) throw new Error("No authenticated user");
+      const response = await apiRequest("PUT", `/api/users/${authUser.id}`, userData);
       return response.json();
     },
     onSuccess: () => {
@@ -69,7 +71,7 @@ export default function Profile() {
         description: "Je profiel is succesvol bijgewerkt.",
       });
       setIsEditing(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/users", currentUser.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", authUser?.id] });
     },
     onError: () => {
       toast({

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +13,6 @@ import { FaWhatsapp } from "react-icons/fa";
 import type { User } from "@shared/schema";
 
 export default function Home() {
-  const [currentUser] = useState({ id: 1 }); // Mock current user ID
   const [selectedFilters, setSelectedFilters] = useState(["Now Available"]);
   const [showLocationFilter, setShowLocationFilter] = useState(false);
   const [locationFilters, setLocationFilters] = useState<LocationFilters>({
@@ -24,14 +24,17 @@ export default function Home() {
     availableNow: false,
   });
   const { toast } = useToast();
+  const { user: authUser } = useAuth();
 
   const { data: availableUsers = [], isLoading } = useQuery({
-    queryKey: ["/api/users", currentUser.id, "potential-matches"],
+    queryKey: ["/api/users", authUser?.id, "potential-matches"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${currentUser.id}/potential-matches`);
+      if (!authUser?.id) throw new Error("No authenticated user");
+      const response = await fetch(`/api/users/${authUser.id}/potential-matches`);
       if (!response.ok) throw new Error("Failed to fetch available users");
       return response.json();
     },
+    enabled: !!authUser?.id,
   });
 
   const toggleFilter = (filter: string) => {
@@ -77,12 +80,13 @@ export default function Home() {
 
   const sendInvitationMutation = useMutation({
     mutationFn: async (targetUser: User) => {
+      if (!authUser?.id) throw new Error("No authenticated user");
       const response = await apiRequest("POST", "/api/invitations", {
-        fromUserId: currentUser.id,
+        fromUserId: authUser.id,
         toUserId: targetUser.id,
         message: `Hoi ${targetUser.name}! Zin om samen te trainen?`,
         location: targetUser.location,
-        workoutType: targetUser.preferredWorkouts[0] || "Algemene training",
+        workoutType: (targetUser.preferredWorkouts && targetUser.preferredWorkouts[0]) || "Algemene training",
         status: "pending"
       });
       return response.json();
@@ -92,7 +96,7 @@ export default function Home() {
         title: "Uitnodiging verstuurd!",
         description: "Je uitnodiging is verstuurd. Je hoort het als ze reageren.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/users", currentUser.id, "invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", authUser?.id, "invitations"] });
     },
     onError: () => {
       toast({
@@ -241,14 +245,14 @@ export default function Home() {
 
                       {/* Workout Preferences */}
                       <div className="flex flex-wrap gap-1 mb-3">
-                        {user.preferredWorkouts.slice(0, 3).map((workout) => (
+                        {(user.preferredWorkouts || []).slice(0, 3).map((workout: string) => (
                           <Badge key={workout} variant="secondary" className="text-xs">
                             {workout}
                           </Badge>
                         ))}
-                        {user.preferredWorkouts.length > 3 && (
+                        {(user.preferredWorkouts || []).length > 3 && (
                           <Badge variant="secondary" className="text-xs">
-                            +{user.preferredWorkouts.length - 3}
+                            +{(user.preferredWorkouts || []).length - 3}
                           </Badge>
                         )}
                       </div>
