@@ -150,10 +150,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/matches/:matchId/chats", async (req, res) => {
+  app.get("/api/invitations/:invitationId/chats", async (req, res) => {
     try {
-      const matchId = parseInt(req.params.matchId);
-      const chats = await storage.getChatsForMatch(matchId);
+      const invitationId = parseInt(req.params.invitationId);
+      const chats = await storage.getChatsForInvitation(invitationId);
       res.json(chats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch chat messages" });

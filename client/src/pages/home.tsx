@@ -41,6 +41,34 @@ export default function Home() {
     return true;
   });
 
+  const sendInvitationMutation = useMutation({
+    mutationFn: async (targetUser: User) => {
+      const response = await apiRequest("POST", "/api/invitations", {
+        fromUserId: currentUser.id,
+        toUserId: targetUser.id,
+        message: `Hoi ${targetUser.name}! Zin om samen te trainen?`,
+        location: targetUser.location,
+        workoutType: targetUser.preferredWorkouts[0] || "Algemene training",
+        status: "pending"
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Uitnodiging verstuurd!",
+        description: "Je uitnodiging is verstuurd. Je hoort het als ze reageren.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", currentUser.id, "invitations"] });
+    },
+    onError: () => {
+      toast({
+        title: "Fout",
+        description: "Kon uitnodiging niet versturen. Probeer opnieuw.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDirectContact = (user: User) => {
     if (user.whatsappNumber) {
       window.open(`https://wa.me/${user.whatsappNumber}`, '_blank');
@@ -51,6 +79,10 @@ export default function Home() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleSendInvitation = (user: User) => {
+    sendInvitationMutation.mutate(user);
   };
 
   if (isLoading) {
@@ -182,19 +214,21 @@ export default function Home() {
                       <div className="flex space-x-2">
                         <Button 
                           size="sm" 
-                          className="flex-1 bg-fitness-green hover:bg-green-600"
-                          onClick={() => handleDirectContact(user)}
+                          className="flex-1 bg-fitness-blue hover:bg-blue-600"
+                          onClick={() => handleSendInvitation(user)}
+                          disabled={sendInvitationMutation.isPending}
                         >
-                          <FaWhatsapp className="w-4 h-4 mr-2" />
-                          Direct Contact
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          Stuur Uitnodiging
                         </Button>
                         <Button 
                           size="sm" 
                           variant="outline" 
                           className="flex-1"
+                          onClick={() => handleDirectContact(user)}
                         >
-                          <MessageCircle className="w-4 h-4 mr-2" />
-                          Chat
+                          <FaWhatsapp className="w-4 h-4 mr-2" />
+                          WhatsApp
                         </Button>
                       </div>
                     </div>
