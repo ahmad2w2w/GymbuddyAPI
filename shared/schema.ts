@@ -116,6 +116,10 @@ export const insertChatSchema = createInsertSchema(chats).omit({
 export const insertWorkoutSessionSchema = createInsertSchema(workoutSessions).omit({
   id: true,
   createdAt: true,
+}).extend({
+  scheduledTime: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
 });
 
 export const insertSessionSchema = createInsertSchema(sessions).omit({

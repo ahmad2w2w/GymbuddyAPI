@@ -451,13 +451,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Workout session routes
   app.post("/api/workout-sessions", async (req, res) => {
     try {
-      const sessionData = insertWorkoutSessionSchema.parse(req.body);
+      // Manual validation to handle date conversion
+      const { invitationId, scheduledTime, location, workoutType, status } = req.body;
+      
+      const sessionData = {
+        invitationId: parseInt(invitationId),
+        scheduledTime: new Date(scheduledTime),
+        location: location || "Westside Fitness",
+        workoutType: workoutType || "Strength", 
+        status: status || "scheduled"
+      };
+      
       const session = await storage.createWorkoutSession(sessionData);
       res.status(201).json(session);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid session data", details: error.errors });
-      }
       console.error("Create workout session error:", error);
       res.status(500).json({ error: "Failed to create workout session" });
     }
