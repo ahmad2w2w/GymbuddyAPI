@@ -125,65 +125,30 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
         )}
         
         <div className={cn(
-          "flex items-end gap-2 mb-1",
-          isOwn ? "justify-end pr-1" : "justify-start pl-1"
+          "flex mb-1",
+          isOwn ? "justify-end" : "justify-start"
         )}>
           <div className={cn(
-            "relative max-w-[80%] px-4 py-3 shadow-lg transition-all duration-300 hover:shadow-xl backdrop-blur-sm border border-white/20 transform hover:scale-105 hover:-translate-y-0.5",
+            "relative max-w-xs px-3 py-2 mx-2 rounded-lg shadow-sm",
             isOwn 
-              ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white rounded-3xl rounded-br-lg shadow-blue-500/30"
-              : "bg-gradient-to-br from-white via-gray-50 to-gray-100 text-gray-900 rounded-3xl rounded-bl-lg border-gray-200 shadow-gray-300/40"
-          )}
-          style={{
-            filter: isOwn 
-              ? "drop-shadow(0 8px 16px rgba(59, 130, 246, 0.25))" 
-              : "drop-shadow(0 6px 12px rgba(0, 0, 0, 0.08))"
-          }}
-          >
-            <div
-              className={cn(
-                "absolute bottom-0 w-0 h-0 border-solid",
-                isOwn
-                  ? "right-0 translate-x-1 translate-y-1"
-                  : "left-0 -translate-x-1 translate-y-1"
-              )}
-              style={{
-                borderLeftWidth: isOwn ? "0" : "10px",
-                borderRightWidth: isOwn ? "10px" : "0",
-                borderTopWidth: "10px",
-                borderBottomWidth: "0",
-                borderLeftColor: isOwn ? "transparent" : "#f3f4f6",
-                borderRightColor: isOwn ? "#4f46e5" : "transparent",
-                borderTopColor: "transparent"
-              }}
-            />
-            
-            <p className={cn(
-              "text-sm leading-relaxed font-medium break-words",
-              isOwn ? "text-white" : "text-gray-800"
-            )}>
-              {msg.message}
-            </p>
+              ? "bg-green-500 text-white rounded-br-none ml-12" 
+              : "bg-white text-gray-900 rounded-bl-none mr-12"
+          )}>
+            <p className="text-sm">{msg.message}</p>
           </div>
         </div>
         
         {isLastInGroup && (
           <div className={cn(
-            "flex items-center gap-1.5 text-xs mt-1 mb-3 px-2 opacity-70 transition-opacity hover:opacity-100",
-            isOwn ? "justify-end text-gray-500" : "justify-start text-gray-500"
+            "flex items-center text-xs mt-1 mb-2 px-4",
+            isOwn ? "justify-end" : "justify-start"
           )}>
-            <div className="flex items-center gap-1 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-full shadow-sm">
-              <Clock className="w-3 h-3" />
-              <span className="font-medium">
-                {formatTime(new Date(msg.sentAt || new Date()))}
-              </span>
-              {isOwn && (
-                <div className="flex items-center ml-1">
-                  <CheckCheck className="w-3 h-3 text-green-500" />
-                  <span className="text-green-600 text-xs ml-0.5">Delivered</span>
-                </div>
-              )}
-            </div>
+            <span className="text-gray-500">
+              {formatTime(new Date(msg.sentAt || new Date()))}
+            </span>
+            {isOwn && (
+              <CheckCheck className="w-4 h-4 text-blue-500 ml-1" />
+            )}
           </div>
         )}
       </div>
@@ -202,37 +167,32 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 via-gray-50 to-white flex flex-col relative overflow-hidden">
-      <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.1),transparent_50%)]" />
+    <div className="min-h-screen bg-gray-100 flex flex-col"
+         style={{ 
+           backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23e5e7eb' fill-opacity='0.1' fill-rule='evenodd'%3E%3Cpath d='m0 40l40-40h-40v40zm40 0v-40h-40l40 40z'/%3E%3C/g%3E%3C/svg%3E")` 
+         }}
+    >
       
-      <header className="relative bg-white/90 backdrop-blur-lg shadow-lg border-b border-gray-200/50 px-6 py-4 flex items-center justify-between z-10">
-        <div className="flex items-center space-x-3">
-          <Button variant="ghost" size="sm" onClick={onBack} className="rounded-full hover:bg-gray-100">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="relative">
-            <Avatar className="w-12 h-12 ring-2 ring-white shadow-lg">
-              <AvatarImage src={otherUser.profileImage || undefined} />
-              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold">
-                {otherUser.name?.charAt(0) || "?"}
-              </AvatarFallback>
-            </Avatar>
-            {isOnline && (
-              <Circle className="absolute -bottom-0.5 -right-0.5 w-4 h-4 text-green-500 fill-current ring-2 ring-white" />
-            )}
-          </div>
-          <div>
-            <h2 className="font-bold text-gray-900 text-lg">{otherUser.name}</h2>
-            <p className="text-sm text-gray-600">{match.location} • {match.workoutType}</p>
-          </div>
+      <header className="bg-green-600 px-4 py-3 flex items-center space-x-3 shadow-sm">
+        <Button variant="ghost" size="sm" onClick={onBack} className="text-white hover:bg-green-700 p-2">
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <Avatar className="w-10 h-10">
+          <AvatarImage src={otherUser.profileImage || undefined} />
+          <AvatarFallback className="bg-gray-300 text-gray-700 text-sm font-medium">
+            {otherUser.name?.charAt(0) || "?"}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1">
+          <h2 className="text-white font-medium text-base">{otherUser.name}</h2>
+          <p className="text-green-100 text-xs">online</p>
         </div>
-        
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="rounded-full hover:bg-gray-100">
-            <Phone className="w-5 h-5" />
-          </Button>
-          <Button variant="ghost" size="sm" className="rounded-full hover:bg-gray-100">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" className="text-white hover:bg-green-700 p-2">
             <Video className="w-5 h-5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="text-white hover:bg-green-700 p-2">
+            <Phone className="w-5 h-5" />
           </Button>
         </div>
       </header>
@@ -252,20 +212,12 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
           )}
           
           {isTyping && (
-            <div className="flex justify-start mb-4 animate-fadeInMessage">
-              <div className="bg-gradient-to-br from-white to-gray-100 border border-gray-200 rounded-3xl rounded-bl-lg px-5 py-4 shadow-lg">
-                <div className="flex items-center space-x-1">
-                  <Avatar className="w-6 h-6 mr-2">
-                    <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs">
-                      {otherUser.name?.charAt(0) || "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-typingDots"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-typingDots"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-typingDots"></div>
-                  </div>
-                  <span className="text-xs text-gray-500 ml-2">Aan het typen...</span>
+            <div className="flex justify-start mb-4">
+              <div className="bg-white rounded-lg rounded-bl-none px-3 py-2 mx-2 mr-12 shadow-sm">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
               </div>
             </div>
@@ -275,21 +227,15 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
         </div>
       </ScrollArea>
 
-      <div className="relative bg-white/95 backdrop-blur-lg border-t border-gray-200/50 px-6 py-4 shadow-lg z-10">
-        <div className="flex items-end gap-4">
-          <div className="flex-1 relative">
+      <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
             <Input
               value={message}
               onChange={(e) => handleTyping(e.target.value)}
               onKeyDown={handleKeyPress}
-              placeholder="Typ een bericht..."
-              className={cn(
-                "rounded-3xl border-2 border-gray-200/80 bg-gray-50/80 backdrop-blur-sm",
-                "px-6 py-4 text-sm leading-relaxed transition-all duration-300",
-                "focus:border-blue-400 focus:ring-4 focus:ring-blue-400/20 focus:bg-white",
-                "placeholder:text-gray-400 resize-none min-h-[48px]",
-                message.trim() && "animate-pulseGlow"
-              )}
+              placeholder="Typ een bericht"
+              className="rounded-full border border-gray-300 bg-white px-4 py-2 focus:border-green-500 focus:ring-1 focus:ring-green-500"
               disabled={sendMessageMutation.isPending}
             />
           </div>
@@ -297,28 +243,16 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
           <Button
             onClick={handleSendMessage}
             disabled={!message.trim() || sendMessageMutation.isPending}
-            size="lg"
-            className={cn(
-              "rounded-full w-12 h-12 p-0 shadow-lg transition-all duration-300",
-              "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600",
-              "hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700",
-              "hover:shadow-xl hover:scale-110 active:scale-95",
-              "disabled:from-gray-300 disabled:via-gray-400 disabled:to-gray-500",
-              "disabled:hover:scale-100 disabled:shadow-md",
-              message.trim() && !sendMessageMutation.isPending && "animate-pulseGlow"
-            )}
+            size="sm"
+            className="rounded-full w-10 h-10 p-0 bg-green-600 hover:bg-green-700"
           >
             {sendMessageMutation.isPending ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
-              <Send className="w-5 h-5 transform transition-transform group-hover:translate-x-0.5" />
+              <Send className="w-4 h-4" />
             )}
           </Button>
         </div>
-        
-        {message.trim() && (
-          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 animate-pulse" />
-        )}
       </div>
     </div>
   );
