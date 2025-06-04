@@ -46,8 +46,19 @@ export default function ProfileSetup() {
 
   const onSubmit = async (data: ProfileSetup) => {
     console.log("Form submitted with data:", data);
+    console.log("Form errors:", form.formState.errors);
     console.log("Selected workouts:", selectedWorkouts);
     console.log("Selected time slots:", selectedTimeSlots);
+    
+    // Check if required workouts are selected
+    if (selectedWorkouts.length === 0) {
+      toast({
+        title: "Fout",
+        description: "Selecteer minimaal één workout type.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       const profileData = {
