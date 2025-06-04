@@ -127,89 +127,44 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
     const isFirstInGroup = index === 0 || chats[index - 1]?.senderId !== msg.senderId;
     
     return (
-      <div
-        key={msg.id}
-        className={cn(
-          "flex items-end gap-2 mb-3 animate-fadeIn",
+      <div key={msg.id} className="mb-1">
+        {/* Show avatar and name for other user's first message in group */}
+        {!isOwn && isFirstInGroup && (
+          <div className="flex items-center gap-2 mb-1 ml-2">
+            <Avatar className="w-6 h-6">
+              <AvatarFallback className="bg-purple-500 text-white text-xs">
+                {otherUser.name?.charAt(0) || "?"}
+              </AvatarFallback>
+            </Avatar>
+            <span className="text-sm font-medium text-gray-700">{otherUser.name}</span>
+          </div>
+        )}
+        
+        <div className={cn(
+          "flex items-end gap-1 mb-1",
           isOwn ? "justify-end" : "justify-start"
-        )}
-      >
-        {!isOwn && isLastInGroup && (
-          <Avatar className="w-8 h-8 mb-1 ring-2 ring-white shadow-md">
-            <AvatarImage src={otherUser.profileImage || undefined} />
-            <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-600 text-white text-xs font-semibold">
-              {otherUser.name?.charAt(0) || "?"}
-            </AvatarFallback>
-          </Avatar>
-        )}
-        
-        {!isOwn && !isLastInGroup && <div className="w-8" />}
-        
-        <div className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
-          <div
-            className={cn(
-              "relative px-4 py-3 shadow-lg animate-messageSlide",
-              "max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg",
-              isOwn
-                ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white"
-                : "bg-gradient-to-br from-white via-gray-50 to-gray-100 border border-gray-200 text-gray-800",
-              // Modern bubble styling with proper tails
-              isOwn
-                ? "rounded-2xl rounded-br-md" 
-                : "rounded-2xl rounded-bl-md",
-              // Enhanced hover and interaction effects
-              "hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 hover:scale-105",
-              "cursor-pointer group"
-            )}
-            style={{
-              // CSS custom properties for advanced bubble effects
-              filter: isOwn 
-                ? "drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3))" 
-                : "drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1))"
-            }}
-          >
-            {/* Bubble tail using CSS pseudo-elements */}
-            <div
-              className={cn(
-                "absolute w-0 h-0",
-                isOwn
-                  ? "bottom-0 right-0 translate-x-1 translate-y-1" 
-                  : "bottom-0 left-0 -translate-x-1 translate-y-1"
-              )}
-              style={{
-                borderLeft: isOwn ? "8px solid transparent" : "8px solid #f3f4f6",
-                borderRight: isOwn ? "8px solid #4f46e5" : "8px solid transparent",
-                borderTop: "8px solid transparent"
-              }}
-            />
-            
-            <p className={cn(
-              "text-sm leading-relaxed font-medium",
-              isOwn ? "text-white" : "text-gray-800"
-            )}>
-              {msg.message}
-            </p>
-            
-            {/* Message status and timestamp */}
-            {isLastInGroup && (
-              <div className={cn(
-                "flex items-center gap-1 mt-2 text-xs opacity-70 group-hover:opacity-100 transition-opacity",
-                isOwn ? "text-blue-100 justify-end" : "text-gray-500 justify-start"
-              )}>
-                <Clock className="w-3 h-3" />
-                <span className="font-medium">
-                  {formatTime(new Date(msg.sentAt || new Date()))}
-                </span>
-                {isOwn && (
-                  <CheckCheck className={cn(
-                    "w-3 h-3 ml-1",
-                    "text-green-300 animate-pulse"
-                  )} />
-                )}
-              </div>
-            )}
+        )}>
+          <div className={cn(
+            "max-w-[85%] px-3 py-2",
+            isOwn 
+              ? "bg-blue-500 text-white rounded-2xl rounded-br-md" 
+              : "bg-gray-100 text-gray-900 rounded-2xl rounded-bl-md"
+          )}>
+            <p className="text-sm">{msg.message}</p>
           </div>
         </div>
+        
+        {/* Timestamp for last message in group */}
+        {isLastInGroup && (
+          <div className={cn(
+            "flex items-center gap-1 text-xs text-gray-500 mb-2",
+            isOwn ? "justify-end mr-2" : "justify-start ml-2"
+          )}>
+            <Clock className="w-3 h-3" />
+            <span>{formatTime(new Date(msg.sentAt || new Date()))}</span>
+            {isOwn && <CheckCheck className="w-3 h-3 text-blue-500" />}
+          </div>
+        )}
       </div>
     );
   };
@@ -226,9 +181,9 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Enhanced Header */}
-      <header className="bg-white/90 backdrop-blur-md shadow-sm border-b px-4 py-4 flex items-center justify-between">
+      <header className="bg-white shadow-sm border-b px-4 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Button variant="ghost" size="sm" onClick={onBack} className="rounded-full">
             <ArrowLeft className="w-4 h-4" />
@@ -265,13 +220,10 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
       </header>
 
       {/* Messages Area */}
-      <ScrollArea className="flex-1 px-4 py-6">
-        <div className="space-y-1 pb-4">
+      <ScrollArea className="flex-1 px-3 py-4">
+        <div className="pb-4">
           {chats.length === 0 ? (
             <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Send className="w-8 h-8 text-blue-600" />
-              </div>
               <p className="text-gray-500 text-lg mb-2">Nog geen berichten</p>
               <p className="text-gray-400 text-sm">Start het gesprek over jullie workout!</p>
             </div>
@@ -281,18 +233,12 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
           
           {/* Typing Indicator */}
           {isTyping && (
-            <div className="flex items-end gap-2 justify-start mb-4">
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={otherUser.profileImage || undefined} />
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs">
-                  {otherUser.name?.charAt(0) || "?"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
+            <div className="flex justify-start mb-4">
+              <div className="bg-gray-200 rounded-2xl px-4 py-3">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
               </div>
             </div>
@@ -302,16 +248,16 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
         </div>
       </ScrollArea>
 
-      {/* Enhanced Input Area */}
-      <div className="bg-white/90 backdrop-blur-md border-t px-4 py-4">
-        <div className="flex items-end gap-3">
-          <div className="flex-1 relative">
+      {/* Input Area */}
+      <div className="bg-white border-t px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
             <Input
               value={message}
               onChange={(e) => handleTyping(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder="Typ een bericht..."
-              className="pr-12 py-3 rounded-full border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 resize-none"
+              className="rounded-full border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               disabled={sendMessageMutation.isPending}
             />
           </div>
@@ -319,7 +265,7 @@ export default function MatchesChatInterface({ match, onBack }: MatchesChatInter
             onClick={handleSendMessage}
             disabled={!message.trim() || sendMessageMutation.isPending}
             size="sm"
-            className="rounded-full w-10 h-10 p-0 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400"
+            className="rounded-full w-10 h-10 p-0 bg-blue-500 hover:bg-blue-600"
           >
             {sendMessageMutation.isPending ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
