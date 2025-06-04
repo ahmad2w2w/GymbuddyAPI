@@ -187,7 +187,7 @@ export default function Home() {
     "18:00", "19:00", "20:00", "21:00"
   ];
 
-  const workoutTypes = ["Strength", "Cardio", "Yoga", "Swimming", "Outdoor", "Boxing"];
+  const availableWorkoutTypes = ["Strength", "Cardio", "Yoga", "Swimming", "Outdoor", "Boxing"];
   const locations = ["Westside Fitness", "Downtown Gym", "City Park", "Beach Workout", "Home Gym"];
 
   if (isLoading) {
@@ -221,7 +221,7 @@ export default function Home() {
       {/* Filter Bar */}
       <div className="px-4 py-3 bg-fitness-light">
         <div className="flex space-x-2 overflow-x-auto pb-2 filter-scroll">
-          {["Now Available", ...workoutTypes].map((filter) => (
+          {["Now Available", ...availableWorkoutTypes].map((filter) => (
             <Button
               key={filter}
               variant={selectedFilters.includes(filter) ? "default" : "outline"}
@@ -445,7 +445,7 @@ export default function Home() {
                     <SelectValue placeholder="Selecteer workout type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {workoutTypes.map((type) => (
+                    {availableWorkoutTypes.map((type) => (
                       <SelectItem key={type} value={type}>{type}</SelectItem>
                     ))}
                   </SelectContent>
