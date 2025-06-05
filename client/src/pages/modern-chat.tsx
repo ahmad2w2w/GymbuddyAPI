@@ -60,13 +60,27 @@ export default function ModernChatPage() {
   const createWorkoutSessionMutation = useMutation({
     mutationFn: async () => {
       if (!invitation) throw new Error("No invitation found");
-      return await apiRequest("/api/workout-sessions", "POST", {
-        invitationId: invitation.id,
-        scheduledTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        location: invitation.location || "Westside Fitness",
-        workoutType: invitation.workoutType || "Strength",
-        status: "scheduled"
+      
+      const response = await fetch("/api/workout-sessions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          invitationId: invitation.id,
+          scheduledTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          location: invitation.location || "Westside Fitness",
+          workoutType: invitation.workoutType || "Strength",
+          status: "scheduled"
+        })
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({
