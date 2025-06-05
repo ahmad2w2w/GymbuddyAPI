@@ -29,6 +29,7 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedWorkouts, setSelectedWorkouts] = useState<string[]>([]);
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
+  const [weeklySchedule, setWeeklySchedule] = useState<{[key: string]: string[]}>({});
   const { toast } = useToast();
   const { user: authUser, logout, isLoggingOut } = useAuth();
 
@@ -62,7 +63,17 @@ export default function Profile() {
   const updateUserMutation = useMutation({
     mutationFn: async (userData: Partial<InsertUser>) => {
       if (!authUser?.id) throw new Error("No authenticated user");
-      const response = await apiRequest("PUT", `/api/users/${authUser.id}`, userData);
+      const response = await fetch(`/api/users/${authUser.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(userData)
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -504,17 +515,33 @@ export default function Profile() {
                       <div key={day} className="space-y-2">
                         <h4 className="font-medium">{day}</h4>
                         <div className="grid grid-cols-3 gap-2">
-                          {["Ochtend (06:00-12:00)", "Middag (12:00-18:00)", "Avond (18:00-22:00)"].map((timeSlot) => (
-                            <Button
-                              key={`${day}-${timeSlot}`}
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="text-xs h-8"
-                            >
-                              {timeSlot.split(" ")[0]}
-                            </Button>
-                          ))}
+                          {["Ochtend (06:00-12:00)", "Middag (12:00-18:00)", "Avond (18:00-22:00)"].map((timeSlot) => {
+                            const slotKey = `${day}-${timeSlot}`;
+                            const isSelected = weeklySchedule[day]?.includes(timeSlot) || false;
+                            
+                            return (
+                              <Button
+                                key={slotKey}
+                                type="button"
+                                variant={isSelected ? "default" : "outline"}
+                                size="sm"
+                                className={`text-xs h-8 ${isSelected ? "bg-fitness-blue text-white" : ""}`}
+                                onClick={() => {
+                                  const currentSlots = weeklySchedule[day] || [];
+                                  const newSlots = isSelected
+                                    ? currentSlots.filter(slot => slot !== timeSlot)
+                                    : [...currentSlots, timeSlot];
+                                  
+                                  setWeeklySchedule(prev => ({
+                                    ...prev,
+                                    [day]: newSlots
+                                  }));
+                                }}
+                              >
+                                {timeSlot.split(" ")[0]}
+                              </Button>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
