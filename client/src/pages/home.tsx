@@ -27,15 +27,7 @@ export default function Home() {
   const [showLocationFilter, setShowLocationFilter] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showInvitationDialog, setShowInvitationDialog] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [invitationData, setInvitationData] = useState({
-    date: "",
-    time: "",
-    location: "",
-    workoutType: "",
-    message: ""
-  });
+
   const [locationFilters, setLocationFilters] = useState<LocationFilters>({
     maxDistance: 5,
     location: "All Locations",
@@ -100,21 +92,16 @@ export default function Home() {
   });
 
   const sendInvitationMutation = useMutation({
-    mutationFn: async () => {
-      if (!authUser?.id || !selectedUser) throw new Error("No authenticated user or selected user");
-      
-      // Combine date and time into ISO string
-      const proposedDateTime = invitationData.date && invitationData.time 
-        ? new Date(`${invitationData.date}T${invitationData.time}:00`).toISOString()
-        : null;
+    mutationFn: async (targetUser: User) => {
+      if (!authUser?.id) throw new Error("No authenticated user");
       
       const response = await apiRequest("POST", "/api/invitations", {
         fromUserId: authUser.id,
-        toUserId: selectedUser.id,
-        message: invitationData.message || `Hoi ${selectedUser.name}! Zin om samen te trainen?`,
-        proposedTime: proposedDateTime,
-        location: invitationData.location || selectedUser.location,
-        workoutType: invitationData.workoutType || (selectedUser.preferredWorkouts && selectedUser.preferredWorkouts[0]) || "Algemene training",
+        toUserId: targetUser.id,
+        message: `Hoi ${targetUser.name}! Zin om samen te trainen?`,
+        proposedTime: null, // Will be determined in chat
+        location: targetUser.location,
+        workoutType: (targetUser.preferredWorkouts && targetUser.preferredWorkouts[0]) || "Algemene training",
         status: "pending"
       });
       return response.json();
@@ -125,15 +112,6 @@ export default function Home() {
         description: "Je uitnodiging is verstuurd. Je hoort het als ze reageren.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/users", authUser?.id, "invitations"] });
-      setShowInvitationDialog(false);
-      setSelectedUser(null);
-      setInvitationData({
-        date: "",
-        time: "",
-        location: "",
-        workoutType: "",
-        message: ""
-      });
     },
     onError: () => {
       toast({
@@ -157,20 +135,7 @@ export default function Home() {
   };
 
   const handleSendInvitation = (user: User) => {
-    setSelectedUser(user);
-    // Pre-fill form with user's preferences
-    setInvitationData({
-      date: "",
-      time: "",
-      location: user.location || "",
-      workoutType: (user.preferredWorkouts && user.preferredWorkouts[0]) || "",
-      message: `Hoi ${user.name}! Zin om samen te trainen?`
-    });
-    setShowInvitationDialog(true);
-  };
-
-  const handleSendInvitationWithDetails = () => {
-    sendInvitationMutation.mutate();
+    sendInvitationMutation.mutate(user);
   };
 
   // Get tomorrow's date as default
@@ -371,121 +336,7 @@ export default function Home() {
         />
       )}
 
-      {/* Invitation Dialog */}
-      <Dialog open={showInvitationDialog} onOpenChange={setShowInvitationDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-fitness-blue" />
-              Workout Uitnodiging
-            </DialogTitle>
-          </DialogHeader>
-          
-          {selectedUser && (
-            <div className="space-y-4">
-              {/* User Info */}
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-12 h-12 bg-fitness-blue text-white rounded-full flex items-center justify-center text-lg font-semibold">
-                  {selectedUser.name?.charAt(0)}
-                </div>
-                <div>
-                  <h3 className="font-semibold">{selectedUser.name}</h3>
-                  <p className="text-sm text-gray-600">{selectedUser.location}</p>
-                </div>
-              </div>
 
-              {/* Date Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="date">Datum</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  min={getTomorrowDate()}
-                  value={invitationData.date}
-                  onChange={(e) => setInvitationData(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full"
-                />
-              </div>
-
-              {/* Time Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="time">Tijd</Label>
-                <Select value={invitationData.time} onValueChange={(value) => setInvitationData(prev => ({ ...prev, time: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecteer tijd" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeSlots.map((time) => (
-                      <SelectItem key={time} value={time}>{time}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Location Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="location">Locatie</Label>
-                <Select value={invitationData.location} onValueChange={(value) => setInvitationData(prev => ({ ...prev, location: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecteer locatie" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map((location) => (
-                      <SelectItem key={location} value={location}>{location}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Workout Type Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="workoutType">Workout Type</Label>
-                <Select value={invitationData.workoutType} onValueChange={(value) => setInvitationData(prev => ({ ...prev, workoutType: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecteer workout type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableWorkoutTypes.map((type) => (
-                      <SelectItem key={type} value={type}>{type}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Message */}
-              <div className="space-y-2">
-                <Label htmlFor="message">Bericht (optioneel)</Label>
-                <Input
-                  id="message"
-                  value={invitationData.message}
-                  onChange={(e) => setInvitationData(prev => ({ ...prev, message: e.target.value }))}
-                  placeholder="Voeg een persoonlijk bericht toe..."
-                  className="w-full"
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowInvitationDialog(false)}
-                  className="flex-1"
-                >
-                  Annuleren
-                </Button>
-                <Button
-                  onClick={handleSendInvitationWithDetails}
-                  disabled={sendInvitationMutation.isPending || !invitationData.date || !invitationData.time}
-                  className="flex-1 bg-fitness-blue hover:bg-blue-600"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  {sendInvitationMutation.isPending ? "Versturen..." : "Verstuur Uitnodiging"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* Bottom Navigation */}
       <EnhancedBottomNavigation currentPage="discover" />
