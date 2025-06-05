@@ -19,6 +19,10 @@ export const users = pgTable("users", {
   availableTimeSlots: jsonb("available_time_slots"), // Specific available times per day
   preferredLocations: text("preferred_locations").array(), // Multiple preferred gyms/locations
   weeklyAvailability: jsonb("weekly_availability"), // Days and times when available
+  isFlexibleWithTimes: boolean("is_flexible_with_times").default(false),
+  allowsSpontaneousWorkouts: boolean("allows_spontaneous_workouts").default(false),
+  generalTimePreference: text("general_time_preference"), // "morning", "afternoon", "evening", "flexible"
+  weeklyPattern: text("weekly_pattern").array(), // ["monday", "wednesday", "friday"] or ["weekends"]
   whatsappNumber: text("whatsapp_number"),
   latitude: text("latitude"),
   longitude: text("longitude"),
@@ -63,6 +67,20 @@ export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),
   userId: integer("user_id").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// User availability for specific date/time matching
+export const userAvailability = pgTable("user_availability", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD format
+  timeSlot: text("time_slot").notNull(), // "09:00", "14:00", etc.
+  location: text("location").notNull(),
+  workoutTypes: text("workout_types").array().notNull(),
+  isRecurring: boolean("is_recurring").default(false),
+  recurringPattern: text("recurring_pattern"), // "weekly", "biweekly", etc.
+  isAvailable: boolean("is_available").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -129,6 +147,11 @@ export const insertSessionSchema = createInsertSchema(sessions).omit({
   createdAt: true,
 });
 
+export const insertUserAvailabilitySchema = createInsertSchema(userAvailability).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type RegisterUser = z.infer<typeof registerSchema>;
@@ -142,3 +165,5 @@ export type WorkoutSession = typeof workoutSessions.$inferSelect;
 export type InsertWorkoutSession = z.infer<typeof insertWorkoutSessionSchema>;
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;
+export type UserAvailability = typeof userAvailability.$inferSelect;
+export type InsertUserAvailability = z.infer<typeof insertUserAvailabilitySchema>;
