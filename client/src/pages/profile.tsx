@@ -113,13 +113,20 @@ export default function Profile() {
     }
   }, [user, form]);
 
-  const onSubmit = (data: InsertUser) => {
+  const onSubmit = (data: any) => {
+    console.log("Form submitted with data:", data);
+    console.log("Selected workouts:", selectedWorkouts);
+    console.log("Selected time slots:", selectedTimeSlots);
+    console.log("Weekly schedule:", weeklySchedule);
+    
     const profileData = {
       ...data,
-      preferredWorkouts: selectedWorkouts.length > 0 ? selectedWorkouts : data.preferredWorkouts,
-      preferredTimeSlots: selectedTimeSlots.length > 0 ? selectedTimeSlots : data.preferredTimeSlots,
+      preferredWorkouts: selectedWorkouts.length > 0 ? selectedWorkouts : (data.preferredWorkouts || []),
+      preferredTimeSlots: selectedTimeSlots.length > 0 ? selectedTimeSlots : (data.preferredTimeSlots || []),
       weeklyAvailability: weeklySchedule,
     };
+    
+    console.log("Profile data being sent:", profileData);
     updateUserMutation.mutate(profileData);
   };
 
@@ -309,7 +316,7 @@ export default function Profile() {
                       <FormItem>
                         <FormLabel>Naam</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} value={field.value || ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -326,7 +333,8 @@ export default function Profile() {
                           <Input 
                             type="number" 
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                           />
                         </FormControl>
                         <FormMessage />
