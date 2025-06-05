@@ -455,8 +455,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { invitationId, scheduledTime, location, workoutType, status } = req.body;
       
       const sessionData = {
-        invitationId: parseInt(invitationId),
-        scheduledTime: new Date(scheduledTime),
+        invitationId: parseInt(invitationId) || 0,
+        scheduledTime: scheduledTime ? new Date(scheduledTime) : new Date(Date.now() + 24 * 60 * 60 * 1000),
         location: location || "Westside Fitness",
         workoutType: workoutType || "Strength", 
         status: status || "scheduled"

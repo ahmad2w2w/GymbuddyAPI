@@ -142,11 +142,27 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-600">Finding your workout buddies...</p>
+      <div className="min-h-screen bg-fitness-light">
+        <EnhancedHeader title="Workout Partners" showSearch={false} />
+        <div className="px-4 py-6 space-y-4">
+          {/* Skeleton Cards */}
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-lg p-4 shadow-sm animate-pulse">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 bg-gray-200 rounded-full shimmer"></div>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded shimmer w-3/4"></div>
+                  <div className="h-3 bg-gray-200 rounded shimmer w-1/2"></div>
+                  <div className="flex space-x-2">
+                    <div className="h-6 bg-gray-200 rounded shimmer w-16"></div>
+                    <div className="h-6 bg-gray-200 rounded shimmer w-20"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
+        <EnhancedBottomNavigation currentPage="discover" />
       </div>
     );
   }
@@ -214,15 +230,26 @@ export default function Home() {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredUsers.map((user: User) => (
-              <Card key={user.id} className="overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+            {filteredUsers.map((user: User, index: number) => (
+              <Card 
+                key={user.id} 
+                className="overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] animate-fade-in"
+                style={{
+                  animationDelay: `${index * 150}ms`,
+                  animationFillMode: 'both'
+                }}
+              >
                 <CardContent className="p-0">
                   <div className="flex">
                     {/* Profile Image */}
                     <div 
-                      className="w-24 h-24 bg-cover bg-center flex-shrink-0"
+                      className="w-24 h-24 bg-cover bg-center flex-shrink-0 relative"
                       style={{ backgroundImage: `url(${user.profileImage})` }}
-                    />
+                    >
+                      {user.availableNow && (
+                        <div className="absolute top-2 right-2 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
+                      )}
+                    </div>
                     
                     {/* User Info */}
                     <div className="flex-1 p-4">
