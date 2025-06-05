@@ -481,17 +481,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Workout session routes
   app.post("/api/workout-sessions", async (req, res) => {
     try {
-      // Manual validation to handle date conversion
       const { invitationId, scheduledTime, location, workoutType, status } = req.body;
       
+      // Validate invitationId
+      const parsedInvitationId = parseInt(invitationId);
+      if (!parsedInvitationId || isNaN(parsedInvitationId)) {
+        return res.status(400).json({ error: "Valid invitation ID required" });
+      }
+      
+      // Check if invitation exists
+      const invitation = await storage.getInvitation(parsedInvitationId);
+      if (!invitation) {
+        return res.status(404).json({ error: "Invitation not found" });
+      }
+      
       const sessionData = {
-        invitationId: parseInt(invitationId) || 0,
+        invitationId: parsedInvitationId,
         scheduledTime: scheduledTime ? new Date(scheduledTime) : new Date(Date.now() + 24 * 60 * 60 * 1000),
-        location: location || "Westside Fitness",
-        workoutType: workoutType || "Strength", 
+        location: location || invitation.location || "Westside Fitness",
+        workoutType: workoutType || invitation.workoutType || "Strength", 
         status: status || "scheduled"
       };
       
+      console.log("Creating workout session with data:", sessionData);
       const session = await storage.createWorkoutSession(sessionData);
       res.status(201).json(session);
     } catch (error) {
