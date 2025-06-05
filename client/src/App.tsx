@@ -10,7 +10,7 @@ import Invitations from "@/pages/invitations";
 import Matches from "@/pages/matches";
 import Schedule from "@/pages/schedule";
 import Profile from "@/pages/profile";
-import Chat from "@/pages/chat";
+import ModernChat from "@/pages/modern-chat";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import NotFound from "@/pages/not-found";
