@@ -138,22 +138,7 @@ export default function Home() {
     sendInvitationMutation.mutate(user);
   };
 
-  // Get tomorrow's date as default
-  const getTomorrowDate = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  };
 
-  // Generate time slots
-  const timeSlots = [
-    "06:00", "07:00", "08:00", "09:00", "10:00", "11:00",
-    "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", 
-    "18:00", "19:00", "20:00", "21:00"
-  ];
-
-  const availableWorkoutTypes = ["Strength", "Cardio", "Yoga", "Swimming", "Outdoor", "Boxing"];
-  const locations = ["Westside Fitness", "Downtown Gym", "City Park", "Beach Workout", "Home Gym"];
 
   if (isLoading) {
     return (
@@ -186,7 +171,7 @@ export default function Home() {
       {/* Filter Bar */}
       <div className="px-4 py-3 bg-fitness-light">
         <div className="flex space-x-2 overflow-x-auto pb-2 filter-scroll">
-          {["Now Available", ...availableWorkoutTypes].map((filter) => (
+          {["Now Available", "Strength", "Cardio", "Yoga", "Swimming", "Outdoor", "Boxing"].map((filter) => (
             <Button
               key={filter}
               variant={selectedFilters.includes(filter) ? "default" : "outline"}

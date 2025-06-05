@@ -492,6 +492,33 @@ export default function Profile() {
                       </FormItem>
                     )}
                   />
+
+                  {/* Weekly Availability Section */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-fitness-dark">Weekschema</h3>
+                    <p className="text-sm text-gray-600">
+                      Stel je beschikbare tijden in zodat je alleen matches ziet met overlappende tijdsloten
+                    </p>
+                    
+                    {["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"].map((day, index) => (
+                      <div key={day} className="space-y-2">
+                        <h4 className="font-medium">{day}</h4>
+                        <div className="grid grid-cols-3 gap-2">
+                          {["Ochtend (06:00-12:00)", "Middag (12:00-18:00)", "Avond (18:00-22:00)"].map((timeSlot) => (
+                            <Button
+                              key={`${day}-${timeSlot}`}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="text-xs h-8"
+                            >
+                              {timeSlot.split(" ")[0]}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
 
