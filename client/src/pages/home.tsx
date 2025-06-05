@@ -40,11 +40,11 @@ export default function Home() {
   const { user: authUser } = useAuth();
 
   const { data: availableUsers = [], isLoading } = useQuery({
-    queryKey: ["/api/users", authUser?.id, "potential-matches"],
+    queryKey: ["/api/users", authUser?.id, "smart-matches"],
     queryFn: async () => {
       if (!authUser?.id) throw new Error("No authenticated user");
-      const response = await fetch(`/api/users/${authUser.id}/potential-matches`);
-      if (!response.ok) throw new Error("Failed to fetch available users");
+      const response = await fetch(`/api/users/${authUser.id}/smart-matches`);
+      if (!response.ok) throw new Error("Failed to fetch smart matches");
       return response.json();
     },
     enabled: !!authUser?.id,
