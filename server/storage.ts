@@ -268,7 +268,12 @@ export class DatabaseStorage implements IStorage {
   // Smart matching based on compatibility
   async getSmartMatches(userId: number): Promise<User[]> {
     const currentUser = await this.getUser(userId);
-    if (!currentUser) return [];
+    if (!currentUser) {
+      console.log("Smart matches: Current user not found for ID:", userId);
+      return [];
+    }
+
+    console.log("Smart matches for user:", currentUser.name, "ID:", userId);
 
     // Get all other users
     const allUsers = await db
@@ -281,15 +286,28 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
+    console.log("Found", allUsers.length, "potential matches");
+
     // Calculate match scores and sort
     const usersWithScores = allUsers
-      .map(user => ({
-        user,
-        score: this.calculateMatchScore(currentUser, user)
-      }))
-      .filter(item => item.score >= 50) // Only show matches with 50%+ compatibility
+      .map(user => {
+        const score = this.calculateMatchScore(currentUser, user);
+        console.log(`Match score with ${user.name} (ID: ${user.id}): ${score}%`);
+        return {
+          user,
+          score
+        };
+      })
+      .filter(item => {
+        const passes = item.score >= 50;
+        if (!passes) {
+          console.log(`Filtered out ${item.user.name} - score too low: ${item.score}%`);
+        }
+        return passes;
+      })
       .sort((a, b) => b.score - a.score);
 
+    console.log("Final matches after filtering:", usersWithScores.length);
     return usersWithScores.map(item => item.user);
   }
 
@@ -297,6 +315,10 @@ export class DatabaseStorage implements IStorage {
   calculateMatchScore(user1: User, user2: User): number {
     let score = 0;
     let maxScore = 0;
+    
+    console.log(`Calculating match score between ${user1.name} and ${user2.name}`);
+    console.log(`User1 - Location: ${user1.location}, Experience: ${user1.experienceLevel}, Workouts: ${JSON.stringify(user1.preferredWorkouts)}`);
+    console.log(`User2 - Location: ${user2.location}, Experience: ${user2.experienceLevel}, Workouts: ${JSON.stringify(user2.preferredWorkouts)}`);
 
     // Location compatibility (30% weight)
     if (user1.location && user2.location) {
