@@ -25,8 +25,8 @@ import type { User } from "@shared/schema";
 export default function Home() {
   const [selectedFilters, setSelectedFilters] = useState(["Now Available"]);
   const [showLocationFilter, setShowLocationFilter] = useState(false);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const [locationFilters, setLocationFilters] = useState<LocationFilters>({
     maxDistance: 5,
@@ -305,12 +305,16 @@ export default function Home() {
                       <div className="flex space-x-2">
                         <Button 
                           size="sm" 
-                          className="flex-1 bg-fitness-blue hover:bg-blue-600"
+                          className="flex-1 bg-fitness-blue hover:bg-blue-600 transition-all duration-200 hover:shadow-md active:scale-95"
                           onClick={() => handleSendInvitation(user)}
                           disabled={sendInvitationMutation.isPending}
                         >
-                          <MessageCircle className="w-4 h-4 mr-2" />
-                          Stuur Uitnodiging
+                          {sendInvitationMutation.isPending ? (
+                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                          ) : (
+                            <MessageCircle className="w-4 h-4 mr-2" />
+                          )}
+                          {sendInvitationMutation.isPending ? "Versturen..." : "Stuur Uitnodiging"}
                         </Button>
                         <Button 
                           size="sm" 
@@ -334,7 +338,7 @@ export default function Home() {
       {/* Floating Filter Button */}
       <Button
         size="lg"
-        className="fixed bottom-24 right-4 w-14 h-14 bg-fitness-orange hover:bg-orange-600 rounded-full shadow-lg"
+        className="fixed bottom-24 right-4 w-14 h-14 bg-gradient-to-r from-fitness-blue to-fitness-green hover:from-blue-600 hover:to-green-600 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95"
         onClick={() => setShowLocationFilter(true)}
       >
         <Sliders className="w-5 h-5 text-white" />
