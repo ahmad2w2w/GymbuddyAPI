@@ -67,7 +67,7 @@ function Router() {
       <Route path="/matches" component={Matches} />
       <Route path="/schedule" component={Schedule} />
       <Route path="/profile" component={Profile} />
-      <Route path="/chat/:invitationId" component={Chat} />
+      <Route path="/chat/:invitationId" component={ModernChat} />
       <Route component={NotFound} />
     </Switch>
   );
