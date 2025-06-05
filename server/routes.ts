@@ -285,19 +285,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id", async (req, res) => {
+  app.put("/api/users/:id", requireAuth, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      
+      // Only allow users to update their own profile
+      if (req.session.userId !== id) {
+        return res.status(403).json({ error: "Unauthorized to update this profile" });
+      }
+      
       const updates = insertUserSchema.partial().parse(req.body);
+      console.log("Profile update data received:", updates);
+      
       const user = await storage.updateUser(id, updates);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
+      
+      console.log("Profile updated successfully:", user.id);
       res.json(user);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Validation error:", error.errors);
         return res.status(400).json({ error: "Invalid user data", details: error.errors });
       }
+      console.error("Profile update error:", error);
       res.status(500).json({ error: "Failed to update user" });
     }
   });
