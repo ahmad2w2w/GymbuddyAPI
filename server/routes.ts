@@ -229,6 +229,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Search workout partners based on time, location and preferences
+  app.get("/api/users/search-workout-partners", async (req, res) => {
+    try {
+      const { date, time, location, workoutType, experienceLevel, maxDistance } = req.query;
+      
+      const allUsers = await storage.getAllUsers();
+      
+      const filteredUsers = allUsers.filter(user => {
+        if (!user.location || !user.experienceLevel) return false;
+        
+        if (location && user.location !== location) return false;
+        if (experienceLevel && user.experienceLevel !== experienceLevel) return false;
+        
+        if (workoutType && user.preferredWorkouts) {
+          const userWorkouts = Array.isArray(user.preferredWorkouts) 
+            ? user.preferredWorkouts 
+            : JSON.parse(user.preferredWorkouts as string || '[]');
+          if (!userWorkouts.includes(workoutType)) return false;
+        }
+        
+        return true;
+      });
+      
+      res.json(filteredUsers);
+    } catch (error) {
+      console.error("Error searching workout partners:", error);
+      res.status(500).json({ error: "Failed to search workout partners" });
+    }
+  });
+
   app.get("/api/users/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);

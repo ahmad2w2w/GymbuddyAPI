@@ -59,11 +59,12 @@ export default function ModernChatPage() {
 
   const createWorkoutSessionMutation = useMutation({
     mutationFn: async () => {
+      if (!invitation) throw new Error("No invitation found");
       return await apiRequest("/api/workout-sessions", "POST", {
-        invitationId: parseInt(invitationId!),
+        invitationId: invitation.id,
         scheduledTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        location: invitation?.location || "Gym",
-        workoutType: invitation?.workoutType || "Training",
+        location: invitation.location || "Westside Fitness",
+        workoutType: invitation.workoutType || "Strength",
         status: "scheduled"
       });
     },

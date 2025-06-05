@@ -11,6 +11,7 @@ import Matches from "@/pages/matches";
 import Schedule from "@/pages/schedule";
 import Profile from "@/pages/profile";
 import ModernChat from "@/pages/modern-chat";
+import WorkoutFinder from "@/pages/workout-finder";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import NotFound from "@/pages/not-found";
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/matches" component={Matches} />
       <Route path="/schedule" component={Schedule} />
       <Route path="/profile" component={Profile} />
+      <Route path="/workout-finder" component={WorkoutFinder} />
       <Route path="/chat/:invitationId" component={ModernChat} />
       <Route component={NotFound} />
     </Switch>
