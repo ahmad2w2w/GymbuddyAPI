@@ -318,8 +318,7 @@ export default function WorkoutFinder() {
                               <span className="mx-2">•</span>
                               <span>
                                 {calculateDistance(
-                                  currentUser?.latitude || 0,
-                                  currentUser?.longitude || 0,
+                                  52.3676, 4.9041, // Default Amsterdam coordinates
                                   user.latitude || 0,
                                   user.longitude || 0
                                 ).toFixed(1)} km
