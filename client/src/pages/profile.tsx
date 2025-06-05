@@ -116,8 +116,9 @@ export default function Profile() {
   const onSubmit = (data: InsertUser) => {
     const profileData = {
       ...data,
-      preferredWorkouts: selectedWorkouts,
-      preferredTimeSlots: selectedTimeSlots,
+      preferredWorkouts: selectedWorkouts.length > 0 ? selectedWorkouts : data.preferredWorkouts,
+      preferredTimeSlots: selectedTimeSlots.length > 0 ? selectedTimeSlots : data.preferredTimeSlots,
+      weeklyAvailability: weeklySchedule,
     };
     updateUserMutation.mutate(profileData);
   };
