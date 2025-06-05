@@ -543,6 +543,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Smart matches endpoint for intelligent matching
+  app.get("/api/users/:id/smart-matches", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const smartMatches = await storage.getSmartMatches(userId);
+      
+      // Add match scores to response
+      const currentUser = await storage.getUser(userId);
+      if (!currentUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const matchesWithScores = smartMatches.map(user => ({
+        ...user,
+        matchScore: storage.calculateMatchScore(currentUser, user)
+      }));
+      
+      res.json(matchesWithScores);
+    } catch (error) {
+      console.error("Smart matches error:", error);
+      res.status(500).json({ error: "Failed to get smart matches" });
+    }
+  });
+
+  // Specific date/time availability search
+  app.get("/api/users/available-at", async (req, res) => {
+    try {
+      const { date, time, location, workoutType } = req.query;
+      
+      if (!date || !time || !location || !workoutType) {
+        return res.status(400).json({ 
+          error: "Date, time, location and workoutType are required" 
+        });
+      }
+      
+      const availableUsers = await storage.getUsersAvailableAt(
+        date as string,
+        time as string, 
+        location as string,
+        workoutType as string
+      );
+      
+      res.json(availableUsers);
+    } catch (error) {
+      console.error("Available users search error:", error);
+      res.status(500).json({ error: "Failed to find available users" });
+    }
+  });
+
+  // User availability management
+  app.post("/api/users/:id/availability", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const availability = await storage.createUserAvailability({
+        userId,
+        ...req.body
+      });
+      res.status(201).json(availability);
+    } catch (error) {
+      console.error("Create availability error:", error);
+      res.status(500).json({ error: "Failed to create availability" });
+    }
+  });
+
+  app.get("/api/users/:id/availability", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const availability = await storage.getUserAvailability(userId);
+      res.json(availability);
+    } catch (error) {
+      console.error("Get availability error:", error);
+      res.status(500).json({ error: "Failed to get availability" });
+    }
+  });
+
   // WebSocket server setup for real-time chat
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
