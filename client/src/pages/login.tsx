@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Dumbbell, Eye, EyeOff } from "lucide-react";
 import type { LoginUser } from "@shared/schema";
@@ -18,6 +19,7 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rememberMe, setRememberMe] = useState(false);
   const { login, isLoggingIn } = useAuth();
   const { toast } = useToast();
 
@@ -29,10 +31,35 @@ export default function Login() {
     },
   });
 
+  // Load saved credentials on component mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('remembered_email');
+    const savedPassword = localStorage.getItem('remembered_password');
+    const wasRemembered = localStorage.getItem('remember_me') === 'true';
+    
+    if (savedEmail && savedPassword && wasRemembered) {
+      form.setValue('email', savedEmail);
+      form.setValue('password', savedPassword);
+      setRememberMe(true);
+    }
+  }, [form]);
+
   const onSubmit = async (data: LoginUser) => {
     try {
       setError(null);
       await login(data);
+      
+      // Handle remember me functionality
+      if (rememberMe) {
+        localStorage.setItem('remembered_email', data.email);
+        localStorage.setItem('remembered_password', data.password);
+        localStorage.setItem('remember_me', 'true');
+      } else {
+        localStorage.removeItem('remembered_email');
+        localStorage.removeItem('remembered_password');
+        localStorage.removeItem('remember_me');
+      }
+      
       toast({
         title: "Welkom terug!",
         description: "Je bent succesvol ingelogd.",
@@ -124,6 +151,21 @@ export default function Login() {
                     </FormItem>
                   )}
                 />
+
+                {/* Remember Me Checkbox */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="remember-me"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked === true)}
+                  />
+                  <label
+                    htmlFor="remember-me"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Onthoud mijn gegevens
+                  </label>
+                </div>
 
                 <Button
                   type="submit"

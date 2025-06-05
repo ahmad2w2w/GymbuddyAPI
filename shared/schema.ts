@@ -16,6 +16,9 @@ export const users = pgTable("users", {
   availableNow: boolean("available_now").default(false),
   preferredTimeSlots: text("preferred_time_slots").array(), // Morning, Afternoon, Evening, etc.
   workoutDuration: text("workout_duration"), // 30-45 mins, 60-90 mins, etc.
+  availableTimeSlots: jsonb("available_time_slots"), // Specific available times per day
+  preferredLocations: text("preferred_locations").array(), // Multiple preferred gyms/locations
+  weeklyAvailability: jsonb("weekly_availability"), // Days and times when available
   whatsappNumber: text("whatsapp_number"),
   latitude: text("latitude"),
   longitude: text("longitude"),
