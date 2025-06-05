@@ -44,8 +44,7 @@ export default function Profile() {
     enabled: !!authUser?.id,
   });
 
-  const form = useForm<InsertUser>({
-    resolver: zodResolver(insertUserSchema),
+  const form = useForm({
     defaultValues: {
       name: "",
       age: 25,
@@ -563,6 +562,11 @@ export default function Profile() {
                   type="submit" 
                   className="flex-1 bg-fitness-blue hover:bg-blue-600"
                   disabled={updateUserMutation.isPending}
+                  onClick={(e) => {
+                    console.log("Submit button clicked");
+                    console.log("Form state:", form.formState);
+                    console.log("Form errors:", form.formState.errors);
+                  }}
                 >
                   {updateUserMutation.isPending ? "Opslaan..." : "Wijzigingen Opslaan"}
                 </Button>
