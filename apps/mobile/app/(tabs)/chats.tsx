@@ -1,11 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { Text, useTheme, Card, Avatar, TextInput, IconButton, ActivityIndicator, Divider } from 'react-native-paper';
+import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
+import { Text, useTheme, Card, Avatar, TextInput, IconButton, ActivityIndicator, Divider, Menu, Portal, Modal, RadioButton, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api, Match, Message } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useSocket } from '@/hooks/useSocket';
+
+const REPORT_REASONS = [
+  { value: 'inappropriate', label: 'Ongepast gedrag' },
+  { value: 'spam', label: 'Spam of reclame' },
+  { value: 'fake', label: 'Nep profiel' },
+  { value: 'harassment', label: 'Intimidatie of pesten' },
+  { value: 'other', label: 'Anders' },
+];
 
 export default function ChatsScreen() {
   const theme = useTheme();
@@ -31,8 +39,15 @@ export default function ChatsScreen() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   
+  // Block/Report state
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportReason, setReportReason] = useState('inappropriate');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  
   const flatListRef = useRef<FlatList>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMatches = useCallback(async () => {
     try {
@@ -157,6 +172,51 @@ export default function ChatsScreen() {
     }
   };
 
+  const handleBlockUser = () => {
+    if (!selectedMatch) return;
+    
+    Alert.alert(
+      'Gebruiker blokkeren',
+      `Weet je zeker dat je ${selectedMatch.otherUser.name} wilt blokkeren? Deze persoon kan je niet meer bereiken en jullie match wordt verwijderd.`,
+      [
+        { text: 'Annuleren', style: 'cancel' },
+        {
+          text: 'Blokkeren',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.blockUser(selectedMatch.otherUser.id);
+              Alert.alert('Geblokkeerd', 'De gebruiker is geblokkeerd.');
+              setSelectedMatch(null);
+              loadMatches(); // Refresh matches
+            } catch (error) {
+              console.error('Block error:', error);
+              Alert.alert('Fout', 'Kon gebruiker niet blokkeren.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReportUser = async () => {
+    if (!selectedMatch) return;
+    
+    setReportLoading(true);
+    try {
+      await api.reportUser(selectedMatch.otherUser.id, reportReason, reportDetails);
+      Alert.alert('Bedankt', 'Je melding is verzonden. We nemen dit serieus.');
+      setReportModalVisible(false);
+      setReportReason('inappropriate');
+      setReportDetails('');
+    } catch (error) {
+      console.error('Report error:', error);
+      Alert.alert('Fout', 'Kon melding niet verzenden.');
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -274,6 +334,26 @@ export default function ChatsScreen() {
               </Text>
             </View>
           </View>
+          <Menu
+            visible={menuVisible}
+            onDismiss={() => setMenuVisible(false)}
+            anchor={
+              <IconButton icon="dots-vertical" onPress={() => setMenuVisible(true)} />
+            }
+          >
+            <Menu.Item
+              leadingIcon="flag"
+              onPress={() => { setMenuVisible(false); setReportModalVisible(true); }}
+              title="Melden"
+            />
+            <Divider />
+            <Menu.Item
+              leadingIcon="block-helper"
+              onPress={() => { setMenuVisible(false); handleBlockUser(); }}
+              title="Blokkeren"
+              titleStyle={{ color: theme.colors.error }}
+            />
+          </Menu>
         </View>
 
         <KeyboardAvoidingView
@@ -390,6 +470,64 @@ export default function ChatsScreen() {
           </View>
         }
       />
+
+      {/* Report Modal */}
+      <Portal>
+        <Modal
+          visible={reportModalVisible}
+          onDismiss={() => setReportModalVisible(false)}
+          contentContainerStyle={[styles.reportModal, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 16 }}>
+            Gebruiker melden
+          </Text>
+          
+          <Text variant="titleSmall" style={{ marginBottom: 8 }}>
+            Selecteer een reden:
+          </Text>
+          
+          <RadioButton.Group onValueChange={setReportReason} value={reportReason}>
+            {REPORT_REASONS.map((reason) => (
+              <RadioButton.Item
+                key={reason.value}
+                label={reason.label}
+                value={reason.value}
+                style={{ paddingVertical: 4 }}
+              />
+            ))}
+          </RadioButton.Group>
+
+          <TextInput
+            label="Extra details (optioneel)"
+            value={reportDetails}
+            onChangeText={setReportDetails}
+            mode="outlined"
+            multiline
+            numberOfLines={3}
+            placeholder="Beschrijf wat er is gebeurd..."
+            style={{ marginTop: 12, marginBottom: 16 }}
+          />
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button
+              mode="outlined"
+              onPress={() => setReportModalVisible(false)}
+              style={{ flex: 1 }}
+            >
+              Annuleren
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleReportUser}
+              loading={reportLoading}
+              disabled={reportLoading}
+              style={{ flex: 1 }}
+            >
+              Melden
+            </Button>
+          </View>
+        </Modal>
+      </Portal>
     </SafeAreaView>
   );
 }
@@ -495,6 +633,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  reportModal: {
+    margin: 24,
+    padding: 24,
+    borderRadius: 16,
   },
 });
 

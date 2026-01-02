@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert, Image } from 'react-native';
-import { Text, useTheme, Card, Avatar, Button, Chip, ProgressBar, List, Divider, Portal, Modal, Switch, IconButton } from 'react-native-paper';
+import { Text, useTheme, Card, Avatar, Button, Chip, ProgressBar, List, Divider, Portal, Modal, Switch, IconButton, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
 import { getLabel, GOALS, LEVELS, TRAINING_STYLES, WEEKDAYS, TIME_SLOTS } from '@/lib/constants';
 import { AvatarPicker } from '@/components/avatar-picker';
 
@@ -15,6 +16,12 @@ export default function ProfileScreen() {
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [upgradeVisible, setUpgradeVisible] = useState(false);
+  
+  // Edit profile state
+  const [editProfileVisible, setEditProfileVisible] = useState(false);
+  const [editName, setEditName] = useState(user?.name || '');
+  const [editBio, setEditBio] = useState(user?.bio || '');
+  const [editLoading, setEditLoading] = useState(false);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -32,6 +39,34 @@ export default function ProfileScreen() {
         },
       ]
     );
+  };
+
+  const openEditProfile = () => {
+    setEditName(user?.name || '');
+    setEditBio(user?.bio || '');
+    setEditProfileVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Fout', 'Naam is verplicht');
+      return;
+    }
+
+    setEditLoading(true);
+    try {
+      await api.updateProfile({
+        name: editName.trim(),
+        bio: editBio.trim() || null,
+      });
+      await refreshUser();
+      setEditProfileVisible(false);
+      Alert.alert('Opgeslagen', 'Je profiel is bijgewerkt');
+    } catch (error: any) {
+      Alert.alert('Fout', error.message || 'Kon profiel niet opslaan');
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const getAvailabilityText = () => {
@@ -55,12 +90,24 @@ export default function ProfileScreen() {
               size={80}
             />
             <View style={styles.profileInfo}>
-              <Text variant="headlineSmall" style={styles.name}>
-                {user?.name}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text variant="headlineSmall" style={styles.name}>
+                  {user?.name}
+                </Text>
+                <IconButton
+                  icon="pencil"
+                  size={18}
+                  onPress={openEditProfile}
+                />
+              </View>
               <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                 {user?.email}
               </Text>
+              {user?.bio && (
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                  {user.bio}
+                </Text>
+              )}
               {user?.isPremium && (
                 <Chip icon="star" compact style={styles.premiumChip}>
                   Premium
@@ -296,6 +343,57 @@ export default function ProfileScreen() {
           </Button>
         </Modal>
       </Portal>
+
+      {/* Edit Profile Modal */}
+      <Portal>
+        <Modal
+          visible={editProfileVisible}
+          onDismiss={() => setEditProfileVisible(false)}
+          contentContainerStyle={[styles.editModal, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 20 }}>
+            Profiel bewerken
+          </Text>
+
+          <TextInput
+            label="Naam"
+            value={editName}
+            onChangeText={setEditName}
+            mode="outlined"
+            style={{ marginBottom: 12 }}
+          />
+
+          <TextInput
+            label="Bio (optioneel)"
+            value={editBio}
+            onChangeText={setEditBio}
+            mode="outlined"
+            multiline
+            numberOfLines={3}
+            placeholder="Vertel iets over jezelf..."
+            style={{ marginBottom: 20 }}
+          />
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button
+              mode="outlined"
+              onPress={() => setEditProfileVisible(false)}
+              style={{ flex: 1 }}
+            >
+              Annuleren
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSaveProfile}
+              loading={editLoading}
+              disabled={editLoading || !editName.trim()}
+              style={{ flex: 1 }}
+            >
+              Opslaan
+            </Button>
+          </View>
+        </Modal>
+      </Portal>
     </SafeAreaView>
   );
 }
@@ -387,6 +485,11 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 16,
     alignItems: 'center',
+  },
+  editModal: {
+    margin: 24,
+    padding: 24,
+    borderRadius: 16,
   },
   premiumFeatures: {
     alignItems: 'flex-start',
