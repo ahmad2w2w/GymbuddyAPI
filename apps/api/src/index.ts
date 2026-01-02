@@ -10,6 +10,7 @@ import swipeRoutes from './routes/swipe.js';
 import sessionsRoutes from './routes/sessions.js';
 import matchesRoutes from './routes/matches.js';
 import notificationsRoutes from './routes/notifications.js';
+import gamificationRoutes from './routes/gamification.js';
 import { prisma } from './lib/prisma.js';
 
 dotenv.config();
@@ -162,7 +163,7 @@ app.get('/', (req, res) => {
     name: 'GymBuddy API',
     version: '1.0.0',
     status: 'running',
-    endpoints: ['/auth', '/users', '/swipe', '/sessions', '/matches']
+    endpoints: ['/auth', '/users', '/swipe', '/sessions', '/matches', '/gamification']
   });
 });
 
@@ -178,6 +179,7 @@ app.use('/swipe', swipeRoutes);
 app.use('/sessions', sessionsRoutes);
 app.use('/matches', matchesRoutes);
 app.use('/notifications', notificationsRoutes);
+app.use('/gamification', gamificationRoutes);
 
 // Error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -345,6 +345,55 @@ class ApiClient {
       { method: 'DELETE', body: { token } }
     );
   }
+
+  // Gamification
+  async checkIn(data?: { gymName?: string; workoutType?: string; note?: string }) {
+    return this.request<{
+      success: boolean;
+      data: {
+        checkIn: { id: string; xpEarned: number; createdAt: string };
+        stats: GamificationStats;
+        badgesEarned: string[];
+        levelUp: string | null;
+      };
+    }>('/gamification/check-in', {
+      method: 'POST',
+      body: data || {},
+    });
+  }
+
+  async getGamificationStats() {
+    return this.request<{
+      success: boolean;
+      data: GamificationStats & {
+        levelProgress: number;
+        xpToNextLevel: number;
+        checkedInToday: boolean;
+        lastCheckIn: string | null;
+        recentCheckIns: Array<{
+          id: string;
+          workoutType: string | null;
+          xpEarned: number;
+          createdAt: string;
+        }>;
+      };
+    }>('/gamification/stats');
+  }
+
+  async getLeaderboard() {
+    return this.request<{
+      success: boolean;
+      data: Array<{
+        rank: number;
+        id: string;
+        name: string;
+        avatarUrl: string | null;
+        xp: number;
+        fitnessLevel: string;
+        currentStreak: number;
+      }>;
+    }>('/gamification/leaderboard');
+  }
 }
 
 export const api = new ApiClient(API_URL);
@@ -370,6 +419,14 @@ export interface User {
   verificationScore: number;
   isPremium: boolean;
   likesRemaining: number;
+  // Gamification
+  xp: number;
+  fitnessLevel: string;
+  currentStreak: number;
+  longestStreak: number;
+  totalWorkouts: number;
+  badges: string[];
+  lastCheckIn: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -449,6 +506,15 @@ export interface CreateSessionInput {
   durationMinutes: number;
   slots: number;
   notes?: string | null;
+}
+
+export interface GamificationStats {
+  xp: number;
+  level: string;
+  currentStreak: number;
+  longestStreak: number;
+  totalWorkouts: number;
+  badges: string[];
 }
 
 

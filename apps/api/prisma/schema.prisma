@@ -36,6 +36,19 @@ model User {
   likesRemaining  Int      @default(10) // Reset daily for free users
   lastLikeReset   DateTime @default(now())
   
+  // XP & Levels
+  xp              Int      @default(0)
+  fitnessLevel    String   @default("newbie") // newbie, regular, gym_rat, legend
+  
+  // Streaks
+  currentStreak   Int      @default(0)
+  longestStreak   Int      @default(0)
+  lastCheckIn     DateTime?
+  totalWorkouts   Int      @default(0)
+  
+  // Badges (JSON array of badge IDs)
+  badges          String   @default("[]")
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
@@ -64,6 +77,9 @@ model User {
   // Password reset
   resetToken      String?
   resetTokenExp   DateTime?
+  
+  // Check-ins for streaks
+  checkIns        CheckIn[]
 }
 
 model Session {
@@ -179,6 +195,17 @@ model PushToken {
   token     String   @unique
   platform  String   // ios, android
   createdAt DateTime @default(now())
+}
+
+model CheckIn {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gymName     String?
+  workoutType String?  // push, pull, legs, cardio, etc
+  note        String?
+  xpEarned    Int      @default(10)
+  createdAt   DateTime @default(now())
 }
 
 
