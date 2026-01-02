@@ -448,6 +448,106 @@ class ApiClient {
       }>;
     }>('/gamification/leaderboard');
   }
+
+  // =====================================================
+  // WORKOUT ROULETTE
+  // =====================================================
+  
+  async spinRoulette() {
+    return this.request<{
+      success: boolean;
+      data: RouletteResult;
+    }>('/features/roulette/spin');
+  }
+
+  async getRouletteCategories() {
+    return this.request<{
+      success: boolean;
+      data: RouletteCategory[];
+    }>('/features/roulette/categories');
+  }
+
+  // =====================================================
+  // BUDDY STREAKS
+  // =====================================================
+
+  async getBuddyStreaks() {
+    return this.request<{
+      success: boolean;
+      data: BuddyStreak[];
+    }>('/features/streaks');
+  }
+
+  async logBuddyWorkout(matchId: string) {
+    return this.request<{
+      success: boolean;
+      data: {
+        message: string;
+        currentStreak: number;
+        longestStreak?: number;
+        xpEarned: number;
+      };
+    }>(`/features/streaks/${matchId}/workout`, { method: 'POST' });
+  }
+
+  // =====================================================
+  // LIVE TRAINING
+  // =====================================================
+
+  async getLiveTraining(params?: { lat?: number; lng?: number; radiusKm?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.lat) searchParams.set('lat', params.lat.toString());
+    if (params?.lng) searchParams.set('lng', params.lng.toString());
+    if (params?.radiusKm) searchParams.set('radiusKm', params.radiusKm.toString());
+    
+    return this.request<{
+      success: boolean;
+      data: LiveTrainingUser[];
+    }>(`/features/training/live?${searchParams.toString()}`);
+  }
+
+  async startTraining(data: {
+    gymName: string;
+    gymAddress?: string;
+    lat: number;
+    lng: number;
+    workoutType: string;
+    durationMinutes?: number;
+    note?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      data: {
+        id: string;
+        message: string;
+        training: LiveTraining;
+      };
+    }>('/features/training/start', { method: 'POST', body: data });
+  }
+
+  async stopTraining() {
+    return this.request<{
+      success: boolean;
+      data: {
+        message: string;
+        xpEarned: number;
+      };
+    }>('/features/training/stop', { method: 'POST' });
+  }
+
+  async getTrainingStatus() {
+    return this.request<{
+      success: boolean;
+      data: {
+        isTraining: boolean;
+        gymName?: string;
+        workoutType?: string;
+        startedAt?: string;
+        estimatedEnd?: string;
+        note?: string;
+      };
+    }>('/features/training/status');
+  }
 }
 
 export const api = new ApiClient(API_URL);
@@ -569,6 +669,76 @@ export interface GamificationStats {
   longestStreak: number;
   totalWorkouts: number;
   badges: string[];
+}
+
+// Workout Roulette Types
+export interface RouletteExercise {
+  name: string;
+  sets: string;
+  muscle: string;
+}
+
+export interface RouletteResult {
+  category: string;
+  name: string;
+  icon: string;
+  color: string;
+  exercises: RouletteExercise[];
+  estimatedMinutes: number;
+  xpReward: number;
+}
+
+export interface RouletteCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  exerciseCount: number;
+}
+
+// Buddy Streak Types
+export interface BuddyStreak {
+  id: string;
+  buddy: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+  currentStreak: number;
+  longestStreak: number;
+  totalWorkouts: number;
+  lastWorkout: string | null;
+}
+
+// Live Training Types
+export interface LiveTraining {
+  id: string;
+  gymName: string;
+  gymAddress?: string;
+  lat: number;
+  lng: number;
+  workoutType: string;
+  startedAt: string;
+  estimatedEnd?: string;
+  note?: string;
+}
+
+export interface LiveTrainingUser {
+  id: string;
+  user: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    fitnessLevel: string;
+  };
+  gymName: string;
+  workoutType: string;
+  startedAt: string;
+  estimatedEnd?: string;
+  note?: string;
+  lat: number;
+  lng: number;
+  distance?: number;
 }
 
 
