@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String
+  name            String
+  bio             String?
+  avatarUrl       String?
+  ageRange        String?  // '18-24', '25-34', etc
+  
+  // Gym info
+  gymName         String?
+  gymAddress      String?
+  lat             Float?
+  lng             Float?
+  preferredRadius Int      @default(10) // km
+  
+  // Training preferences (stored as JSON strings for SQLite)
+  goals           String   @default("[]") // JSON array
+  level           String?  // beginner, intermediate, advanced
+  trainingStyle   String?  // push_pull_legs, full_body, etc
+  availability    String   @default("[]") // JSON array
+  interestTags    String   @default("[]") // JSON array
+  
+  // Gamification
+  verificationScore Int    @default(0)
+  isPremium       Boolean  @default(false)
+  likesRemaining  Int      @default(10) // Reset daily for free users
+  lastLikeReset   DateTime @default(now())
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  sessions        Session[]
+  likesGiven      Like[]         @relation("LikesGiven")
+  likesReceived   Like[]         @relation("LikesReceived")
+  matchesAsA      Match[]        @relation("MatchUserA")
+  matchesAsB      Match[]        @relation("MatchUserB")
+  messages        Message[]
+  joinRequests    JoinRequest[]
+  
+  // Users this user has passed on (to not show again)
+  passedUsers     Pass[]         @relation("PassedBy")
+  passedByUsers   Pass[]         @relation("PassedOn")
+  
+  // Block/Report
+  blockedUsers    Block[]        @relation("Blocker")
+  blockedByUsers  Block[]        @relation("Blocked")
+  reportsMade     Report[]       @relation("Reporter")
+  reportsReceived Report[]       @relation("Reported")
+  
+  // Push notifications
+  pushTokens      PushToken[]
+  
+  // Password reset
+  resetToken      String?
+  resetTokenExp   DateTime?
+}
+
+model Session {
+  id              String   @id @default(uuid())
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  title           String
+  workoutType     String   // push, pull, legs, etc
+  intensity       String   // low, medium, high
+  
+  gymName         String
+  gymAddress      String?
+  lat             Float
+  lng             Float
+  
+  startTime       DateTime
+  durationMinutes Int
+  slots           Int      @default(1)
+  slotsAvailable  Int      @default(1)
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  
+  // Relations
+  joinRequests    JoinRequest[]
+}
+
+model Like {
+  id          String   @id @default(uuid())
+  fromUserId  String
+  fromUser    User     @relation("LikesGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User     @relation("LikesReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@unique([fromUserId, toUserId])
+}
+
+model Pass {
+  id          String   @id @default(uuid())
+  fromUserId  String
+  fromUser    User     @relation("PassedBy", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User     @relation("PassedOn", fields: [toUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@unique([fromUserId, toUserId])
+}
+
+model Match {
+  id        String   @id @default(uuid())
+  userAId   String
+  userA     User     @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId   String
+  userB     User     @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  
+  messages  Message[]
+  
+  @@unique([userAId, userBId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model JoinRequest {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  requesterId String
+  requester   User     @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  status      String   @default("pending") // pending, accepted, declined
+  createdAt   DateTime @default(now())
+  
+  @@unique([sessionId, requesterId])
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  
+  @@unique([blockerId, blockedId])
+}
+
+model Report {
+  id         String   @id @default(uuid())
+  reporterId String
+  reporter   User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedId String
+  reported   User     @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
+  reason     String   // inappropriate, spam, fake, harassment, other
+  details    String?
+  status     String   @default("pending") // pending, reviewed, resolved
+  createdAt  DateTime @default(now())
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String   // ios, android
+  createdAt DateTime @default(now())
+}

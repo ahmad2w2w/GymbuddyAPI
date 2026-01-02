@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "GymBuddy",
+    "slug": "gymbuddy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "gymbuddy",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#FF6B35"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gymbuddy.app"
+    },
+    "android": {
+      "package": "com.gymbuddy.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow GymBuddy to use your location to find nearby gyms and workout partners."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow GymBuddy to access your photos for your profile picture.",
+          "cameraPermission": "Allow GymBuddy to access your camera to take a profile picture."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF6B35"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
