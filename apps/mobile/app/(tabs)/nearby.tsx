@@ -1,15 +1,49 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, Dimensions, Alert, ScrollView } from 'react-native';
+import { View, StyleSheet, FlatList, Dimensions, Alert, ScrollView, TouchableOpacity, useColorScheme, RefreshControl } from 'react-native';
 import { Text, Button, useTheme, Card, Chip, IconButton, SegmentedButtons, ActivityIndicator, Portal, Modal, Badge, Avatar, Divider, TextInput, Menu } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { LinearGradient } from 'expo-linear-gradient';
+import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { api, Session, JoinRequest } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { getLabel, WORKOUT_TYPES, INTENSITIES, LEVELS } from '@/lib/constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Workout type colors and icons
+const WORKOUT_COLORS: Record<string, { gradient: [string, string]; icon: string }> = {
+  push: { gradient: ['#FF6B35', '#FF3D00'], icon: 'arm-flex' },
+  pull: { gradient: ['#7C4DFF', '#651FFF'], icon: 'rowing' },
+  legs: { gradient: ['#00C853', '#00E676'], icon: 'run' },
+  cardio: { gradient: ['#00B0FF', '#0091EA'], icon: 'heart-pulse' },
+  full_body: { gradient: ['#FF1744', '#F50057'], icon: 'human-handsup' },
+  upper: { gradient: ['#FFB300', '#FFA000'], icon: 'arm-flex-outline' },
+  lower: { gradient: ['#26A69A', '#00897B'], icon: 'shoe-sneaker' },
+  core: { gradient: ['#EC407A', '#D81B60'], icon: 'meditation' },
+  hiit: { gradient: ['#FF5722', '#E64A19'], icon: 'lightning-bolt' },
+  yoga: { gradient: ['#9575CD', '#7E57C2'], icon: 'yoga' },
+  other: { gradient: ['#78909C', '#546E7A'], icon: 'dumbbell' },
+};
+
+const getWorkoutStyle = (workoutType: string) => {
+  return WORKOUT_COLORS[workoutType] || WORKOUT_COLORS.other;
+};
+
+// Dark mode map style
+const darkMapStyle = [
+  { elementType: 'geometry', stylers: [{ color: '#1d1d2e' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#1d1d2e' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8a8a9a' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a2a3e' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1d1d2e' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3a3a4e' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e0e1a' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#252536' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#1a2a1a' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2a2a3e' }] },
+];
 
 // Session status helper
 type SessionStatus = 'upcoming' | 'ongoing' | 'past';
@@ -28,15 +62,19 @@ export default function NearbyScreen() {
   const theme = useTheme();
   const { user } = useAuth();
   const mapRef = useRef<MapView>(null);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   // Main tab: 'nearby' or 'mine'
   const [mainTab, setMainTab] = useState<'nearby' | 'mine'>('nearby');
+  const [refreshing, setRefreshing] = useState(false);
   
   // Nearby sessions state
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [mapPreviewSession, setMapPreviewSession] = useState<Session | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [requestingJoin, setRequestingJoin] = useState(false);
 
@@ -271,55 +309,145 @@ export default function NearbyScreen() {
     });
   };
 
-  const renderSessionCard = ({ item }: { item: Session }) => (
-    <Card
-      style={[styles.sessionCard, { backgroundColor: theme.colors.surface }]}
-      onPress={() => setSelectedSession(item)}
-    >
-      <Card.Content>
-        <View style={styles.sessionHeader}>
-          <Text variant="titleMedium" style={styles.sessionTitle}>
-            {item.title}
-          </Text>
-          <Chip compact icon="account-multiple">
-            {item.slotsAvailable}/{item.slots}
-          </Chip>
-        </View>
+  // Get time until session starts
+  const getTimeUntil = (dateStr: string) => {
+    const now = new Date();
+    const start = new Date(dateStr);
+    const diff = start.getTime() - now.getTime();
+    
+    if (diff < 0) return null;
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      return `${days}d`;
+    }
+    if (hours > 0) return `${hours}u ${minutes}m`;
+    return `${minutes}m`;
+  };
 
-        <View style={styles.sessionInfo}>
-          <MaterialCommunityIcons name="dumbbell" size={16} color={theme.colors.onSurfaceVariant} />
-          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-            {item.gymName}
-          </Text>
-        </View>
+  // Pull to refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    if (mainTab === 'nearby') {
+      await loadSessions();
+    } else {
+      await loadMySessions();
+    }
+    setRefreshing(false);
+  }, [mainTab, loadSessions, loadMySessions]);
 
-        <View style={styles.sessionInfo}>
-          <MaterialCommunityIcons name="clock-outline" size={16} color={theme.colors.onSurfaceVariant} />
-          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-            {formatDate(item.startTime)} • {item.durationMinutes} min
-          </Text>
-        </View>
-
-        {item.distance !== undefined && (
-          <View style={styles.sessionInfo}>
-            <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              {item.distance} km
-            </Text>
+  const renderSessionCard = ({ item }: { item: Session }) => {
+    const workoutStyle = getWorkoutStyle(item.workoutType);
+    const status = getSessionStatus(item);
+    const timeUntil = getTimeUntil(item.startTime);
+    
+    return (
+      <TouchableOpacity
+        style={[styles.sessionCard, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}
+        onPress={() => setSelectedSession(item)}
+        activeOpacity={0.7}
+      >
+        {/* Colored accent bar */}
+        <LinearGradient
+          colors={workoutStyle.gradient}
+          style={styles.cardAccent}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        
+        <View style={styles.cardContent}>
+          {/* Header row */}
+          <View style={styles.cardHeader}>
+            <View style={[styles.workoutIconContainer, { backgroundColor: workoutStyle.gradient[0] + '20' }]}>
+              <MaterialCommunityIcons name={workoutStyle.icon as any} size={24} color={workoutStyle.gradient[0]} />
+            </View>
+            <View style={styles.cardHeaderText}>
+              <Text variant="titleMedium" style={[styles.sessionTitle, { color: theme.colors.onBackground }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                {item.owner?.name || 'Onbekend'}
+              </Text>
+            </View>
+            {/* Time badge */}
+            {status === 'ongoing' ? (
+              <View style={[styles.timeBadge, { backgroundColor: '#00C853' }]}>
+                <MaterialCommunityIcons name="play" size={12} color="white" />
+                <Text style={styles.timeBadgeText}>LIVE</Text>
+              </View>
+            ) : timeUntil ? (
+              <View style={[styles.timeBadge, { backgroundColor: workoutStyle.gradient[0] }]}>
+                <MaterialCommunityIcons name="clock-outline" size={12} color="white" />
+                <Text style={styles.timeBadgeText}>{timeUntil}</Text>
+              </View>
+            ) : null}
           </View>
-        )}
 
-        <View style={styles.sessionChips}>
-          <Chip compact style={styles.chip}>
-            {getLabel(WORKOUT_TYPES, item.workoutType)}
-          </Chip>
-          <Chip compact style={styles.chip}>
-            {getLabel(INTENSITIES, item.intensity)}
-          </Chip>
+          {/* Info rows */}
+          <View style={styles.cardInfoSection}>
+            <View style={styles.cardInfoRow}>
+              <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, flex: 1 }} numberOfLines={1}>
+                {item.gymName}
+              </Text>
+              {item.distance !== undefined && (
+                <Text variant="labelMedium" style={{ color: workoutStyle.gradient[0], fontWeight: '600' }}>
+                  {item.distance} km
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.cardInfoRow}>
+              <MaterialCommunityIcons name="calendar-clock" size={16} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                {formatDate(item.startTime)}
+              </Text>
+              <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                {item.durationMinutes} min
+              </Text>
+            </View>
+          </View>
+
+          {/* Footer */}
+          <View style={styles.cardFooter}>
+            <View style={styles.cardChips}>
+              <View style={[styles.workoutChip, { backgroundColor: workoutStyle.gradient[0] + '15' }]}>
+                <Text style={[styles.workoutChipText, { color: workoutStyle.gradient[0] }]}>
+                  {getLabel(WORKOUT_TYPES, item.workoutType)}
+                </Text>
+              </View>
+              <View style={[styles.intensityChip, { backgroundColor: isDark ? '#252536' : '#F0F0F0' }]}>
+                <Text style={[styles.intensityChipText, { color: theme.colors.onSurfaceVariant }]}>
+                  {getLabel(INTENSITIES, item.intensity)}
+                </Text>
+              </View>
+            </View>
+            
+            {/* Slots indicator */}
+            <View style={styles.slotsContainer}>
+              <View style={styles.slotsBar}>
+                <View 
+                  style={[
+                    styles.slotsFill, 
+                    { 
+                      width: `${((item.slots - item.slotsAvailable) / item.slots) * 100}%`,
+                      backgroundColor: item.slotsAvailable === 0 ? '#FF1744' : workoutStyle.gradient[0] 
+                    }
+                  ]} 
+                />
+              </View>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                {item.slotsAvailable}/{item.slots}
+              </Text>
+            </View>
+          </View>
         </View>
-      </Card.Content>
-    </Card>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   // Count pending requests across all my sessions
   const pendingRequestsCount = mySessions.reduce((count, session) => {
@@ -359,39 +487,65 @@ export default function NearbyScreen() {
     const acceptedRequests = item.joinRequests?.filter(r => r.status === 'accepted') || [];
     const status = getSessionStatus(item);
     const isPast = status === 'past';
+    const workoutStyle = getWorkoutStyle(item.workoutType);
+    const timeUntil = getTimeUntil(item.startTime);
 
     return (
-      <Card 
+      <TouchableOpacity 
         style={[
-          styles.sessionCard, 
-          { backgroundColor: theme.colors.surface },
-          isPast && { opacity: 0.7 }
+          styles.mySessionCard, 
+          { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' },
+          isPast && { opacity: 0.6 }
         ]}
         onPress={() => setSelectedMySession(item)}
+        activeOpacity={0.7}
       >
-        <Card.Content>
-          {/* Header with status and menu */}
-          <View style={styles.sessionHeader}>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <StatusBadge status={status} />
-                {pendingRequests.length > 0 && (
-                  <Badge style={{ backgroundColor: theme.colors.error }}>{pendingRequests.length}</Badge>
-                )}
-              </View>
-              <Text variant="titleMedium" style={styles.sessionTitle}>
-                {item.title}
+        {/* Top colored bar based on status */}
+        <LinearGradient
+          colors={status === 'ongoing' ? ['#00C853', '#00E676'] : status === 'upcoming' ? workoutStyle.gradient : ['#9E9E9E', '#BDBDBD']}
+          style={styles.myCardTopBar}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        />
+
+        <View style={styles.myCardContent}>
+          {/* Header Row */}
+          <View style={styles.myCardHeader}>
+            {/* Status badge */}
+            <View style={[
+              styles.statusBadge,
+              { backgroundColor: status === 'ongoing' ? '#00C853' : status === 'upcoming' ? workoutStyle.gradient[0] : '#9E9E9E' }
+            ]}>
+              <MaterialCommunityIcons 
+                name={status === 'ongoing' ? 'play-circle' : status === 'upcoming' ? 'clock-outline' : 'check-circle'} 
+                size={12} 
+                color="white" 
+              />
+              <Text style={styles.statusBadgeText}>
+                {status === 'ongoing' ? 'LIVE' : status === 'upcoming' ? (timeUntil || 'Gepland') : 'Klaar'}
               </Text>
             </View>
+            
+            {/* Pending notification */}
+            {pendingRequests.length > 0 && (
+              <View style={styles.pendingBadge}>
+                <MaterialCommunityIcons name="account-clock" size={12} color="white" />
+                <Text style={styles.pendingBadgeText}>{pendingRequests.length}</Text>
+              </View>
+            )}
+            
+            {/* Menu */}
+            <View style={{ flex: 1 }} />
             <Menu
               visible={menuVisible === item.id}
               onDismiss={() => setMenuVisible(null)}
               anchor={
-                <IconButton
-                  icon="dots-vertical"
-                  size={20}
+                <TouchableOpacity 
+                  style={styles.menuButton}
                   onPress={() => setMenuVisible(item.id)}
-                />
+                >
+                  <MaterialCommunityIcons name="dots-vertical" size={20} color={theme.colors.onSurfaceVariant} />
+                </TouchableOpacity>
               }
             >
               <Menu.Item 
@@ -414,102 +568,97 @@ export default function NearbyScreen() {
             </Menu>
           </View>
 
-          {/* Location */}
-          <View style={styles.sessionInfo}>
-            <MaterialCommunityIcons name="dumbbell" size={16} color={theme.colors.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              {item.gymName}
-            </Text>
-          </View>
-
-          {/* Time */}
-          <View style={styles.sessionInfo}>
-            <MaterialCommunityIcons name="clock-outline" size={16} color={theme.colors.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              {formatDate(item.startTime)} • {item.durationMinutes} min
-            </Text>
-          </View>
-
-          {/* Slots */}
-          <View style={styles.sessionInfo}>
-            <MaterialCommunityIcons name="account-multiple" size={16} color={theme.colors.onSurfaceVariant} />
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              {item.slots - item.slotsAvailable}/{item.slots} deelnemers
-            </Text>
-          </View>
-
-          <View style={styles.sessionChips}>
-            <Chip compact style={styles.chip}>
-              {getLabel(WORKOUT_TYPES, item.workoutType)}
-            </Chip>
-            <Chip compact style={styles.chip}>
-              {getLabel(INTENSITIES, item.intensity)}
-            </Chip>
-          </View>
-
-          {/* Pending Requests */}
-          {pendingRequests.length > 0 && !isPast && (
-            <View style={styles.requestsSection}>
-              <Divider style={{ marginVertical: 12 }} />
-              <Text variant="titleSmall" style={{ marginBottom: 8, color: theme.colors.primary }}>
-                📨 {pendingRequests.length} aanvra{pendingRequests.length === 1 ? 'ag' : 'gen'}
+          {/* Title with workout icon */}
+          <View style={styles.myCardTitleRow}>
+            <View style={[styles.myWorkoutIcon, { backgroundColor: workoutStyle.gradient[0] + '20' }]}>
+              <MaterialCommunityIcons name={workoutStyle.icon as any} size={20} color={workoutStyle.gradient[0]} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="titleMedium" style={[styles.myCardTitle, { color: theme.colors.onBackground }]} numberOfLines={1}>
+                {item.title}
               </Text>
-              {pendingRequests.map((request) => (
-                <View key={request.id} style={styles.requestItem}>
-                  <View style={styles.requestInfo}>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                {getLabel(WORKOUT_TYPES, item.workoutType)} • {getLabel(INTENSITIES, item.intensity)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Info Grid */}
+          <View style={styles.myCardInfoGrid}>
+            <View style={styles.myCardInfoItem}>
+              <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1 }} numberOfLines={1}>
+                {item.gymName}
+              </Text>
+            </View>
+            <View style={styles.myCardInfoItem}>
+              <MaterialCommunityIcons name="calendar-clock" size={16} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                {formatDate(item.startTime)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Participants Progress Bar */}
+          <View style={styles.participantsProgress}>
+            <View style={styles.participantsLabels}>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                Deelnemers
+              </Text>
+              <Text variant="labelMedium" style={{ color: workoutStyle.gradient[0], fontWeight: '700' }}>
+                {item.slots - item.slotsAvailable}/{item.slots}
+              </Text>
+            </View>
+            <View style={styles.progressBarContainer}>
+              <View 
+                style={[
+                  styles.progressBarFill, 
+                  { 
+                    width: `${((item.slots - item.slotsAvailable) / item.slots) * 100}%`,
+                    backgroundColor: workoutStyle.gradient[0] 
+                  }
+                ]} 
+              />
+            </View>
+            {/* Avatar stack */}
+            {acceptedRequests.length > 0 && (
+              <View style={styles.avatarStack}>
+                {acceptedRequests.slice(0, 3).map((request, index) => (
+                  <View key={request.id} style={[styles.stackedAvatar, { marginLeft: index > 0 ? -8 : 0, zIndex: 3 - index }]}>
                     {request.requester?.avatarUrl ? (
-                      <Avatar.Image size={40} source={{ uri: request.requester.avatarUrl }} />
+                      <Avatar.Image size={24} source={{ uri: request.requester.avatarUrl }} />
                     ) : (
                       <Avatar.Text
-                        size={40}
-                        label={request.requester?.name?.substring(0, 2).toUpperCase() || '??'}
-                        style={{ backgroundColor: theme.colors.primaryContainer }}
+                        size={24}
+                        label={request.requester?.name?.substring(0, 1).toUpperCase() || '?'}
+                        style={{ backgroundColor: workoutStyle.gradient[0] }}
+                        labelStyle={{ fontSize: 10 }}
                       />
                     )}
-                    <View style={{ marginLeft: 12, flex: 1 }}>
-                      <Text variant="bodyLarge" style={{ fontWeight: '600' }}>
-                        {request.requester?.name || 'Onbekend'}
-                      </Text>
-                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                        {request.requester?.level ? getLabel(LEVELS, request.requester.level) : 'Geen niveau'}
-                      </Text>
-                    </View>
                   </View>
-                  <View style={styles.requestActions}>
-                    <IconButton
-                      icon="check"
-                      mode="contained"
-                      containerColor={theme.colors.primaryContainer}
-                      iconColor={theme.colors.primary}
-                      size={20}
-                      onPress={() => handleAcceptRequest(item.id, request.id)}
-                      disabled={handlingRequest === request.id}
-                      loading={handlingRequest === request.id}
-                    />
-                    <IconButton
-                      icon="close"
-                      mode="contained"
-                      containerColor={theme.colors.errorContainer}
-                      iconColor={theme.colors.error}
-                      size={20}
-                      onPress={() => handleDeclineRequest(item.id, request.id)}
-                      disabled={handlingRequest === request.id}
-                    />
+                ))}
+                {acceptedRequests.length > 3 && (
+                  <View style={[styles.stackedAvatar, { marginLeft: -8, backgroundColor: isDark ? '#252536' : '#E0E0E0' }]}>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: theme.colors.onSurfaceVariant }}>
+                      +{acceptedRequests.length - 3}
+                    </Text>
                   </View>
-                </View>
-              ))}
-            </View>
-          )}
+                )}
+              </View>
+            )}
+          </View>
 
-          {/* Accepted Participants */}
-          {acceptedRequests.length > 0 && (
-            <View style={styles.participantsSection}>
-              <Divider style={{ marginVertical: 12 }} />
-              <Text variant="titleSmall" style={{ marginBottom: 8 }}>
-                ✅ Deelnemers ({acceptedRequests.length})
-              </Text>
-              {acceptedRequests.map((request) => (
-                <View key={request.id} style={styles.requestItem}>
+          {/* Pending Requests Section */}
+          {pendingRequests.length > 0 && !isPast && (
+            <View style={styles.pendingSection}>
+              <View style={styles.pendingSectionHeader}>
+                <MaterialCommunityIcons name="account-clock" size={16} color="#FF6B35" />
+                <Text variant="labelMedium" style={{ color: '#FF6B35', fontWeight: '700', marginLeft: 6 }}>
+                  {pendingRequests.length} wachtend{pendingRequests.length > 1 ? 'e' : ''} aanvra{pendingRequests.length === 1 ? 'ag' : 'gen'}
+                </Text>
+              </View>
+              {pendingRequests.slice(0, 2).map((request) => (
+                <View key={request.id} style={styles.pendingRequestItem}>
                   <View style={styles.requestInfo}>
                     {request.requester?.avatarUrl ? (
                       <Avatar.Image size={36} source={{ uri: request.requester.avatarUrl }} />
@@ -520,90 +669,169 @@ export default function NearbyScreen() {
                         style={{ backgroundColor: theme.colors.primaryContainer }}
                       />
                     )}
-                    <View style={{ marginLeft: 12, flex: 1 }}>
-                      <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+                    <View style={{ marginLeft: 10, flex: 1 }}>
+                      <Text variant="bodyMedium" style={{ fontWeight: '600', color: theme.colors.onBackground }}>
                         {request.requester?.name || 'Onbekend'}
+                      </Text>
+                      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                        {request.requester?.level ? getLabel(LEVELS, request.requester.level) : 'Geen niveau'}
                       </Text>
                     </View>
                   </View>
-                  {!isPast && (
-                    <IconButton
-                      icon="account-remove"
-                      mode="contained"
-                      containerColor={theme.colors.errorContainer}
-                      iconColor={theme.colors.error}
-                      size={18}
-                      onPress={() => handleRemoveParticipant(item, request)}
+                  <View style={styles.requestActions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.acceptButton]}
+                      onPress={() => handleAcceptRequest(item.id, request.id)}
                       disabled={handlingRequest === request.id}
-                    />
-                  )}
+                    >
+                      {handlingRequest === request.id ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <MaterialCommunityIcons name="check" size={18} color="white" />
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.declineButton]}
+                      onPress={() => handleDeclineRequest(item.id, request.id)}
+                      disabled={handlingRequest === request.id}
+                    >
+                      <MaterialCommunityIcons name="close" size={18} color="#FF1744" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
+              {pendingRequests.length > 2 && (
+                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8 }}>
+                  +{pendingRequests.length - 2} meer
+                </Text>
+              )}
             </View>
           )}
 
-          {/* Notes */}
+          {/* Notes Preview */}
           {item.notes && (
-            <View style={[styles.notesSection, { marginTop: 12 }]}>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                📝 {item.notes}
+            <View style={[styles.notesPreview, { backgroundColor: isDark ? '#252536' : '#F5F5F5' }]}>
+              <MaterialCommunityIcons name="note-text" size={14} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6, flex: 1 }} numberOfLines={1}>
+                {item.notes}
               </Text>
             </View>
           )}
-        </Card.Content>
-      </Card>
+        </View>
+      </TouchableOpacity>
     );
   };
 
   // Loading state
   if ((mainTab === 'nearby' && loading) || (mainTab === 'mine' && loadingMine)) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" />
-          <Text variant="bodyLarge" style={{ marginTop: 16 }}>
+      <View style={[styles.container, { backgroundColor: isDark ? '#0D0D14' : '#FAFAFA' }]}>
+        <SafeAreaView style={styles.loadingContainer} edges={['top']}>
+          <LinearGradient
+            colors={['#FF6B35', '#FF3D00']}
+            style={styles.loadingIcon}
+          >
+            <MaterialCommunityIcons name="calendar-clock" size={32} color="white" />
+          </LinearGradient>
+          <Text variant="titleMedium" style={{ marginTop: 20, color: theme.colors.onBackground }}>
             Sessies laden...
           </Text>
-        </View>
-      </SafeAreaView>
+          <ActivityIndicator size="small" style={{ marginTop: 16 }} color={theme.colors.primary} />
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top']}>
-      {/* Main Tab Selector */}
-      <View style={styles.mainTabContainer}>
-        <SegmentedButtons
-          value={mainTab}
-          onValueChange={(value) => setMainTab(value as 'nearby' | 'mine')}
-          buttons={[
-            { value: 'nearby', label: 'In de buurt' },
-            { 
-              value: 'mine', 
-              label: `Mijn sessies${pendingRequestsCount > 0 ? ` (${pendingRequestsCount})` : ''}`,
-            },
-          ]}
-          style={styles.mainTabButtons}
-        />
-      </View>
-
-      {/* Nearby Sessions View */}
-      {mainTab === 'nearby' && (
-        <>
-          <View style={styles.header}>
-            <Text variant="titleMedium" style={styles.headerTitle}>
-              Sessies in de buurt
-            </Text>
-            <SegmentedButtons
-              value={viewMode}
-              onValueChange={(value) => setViewMode(value as 'map' | 'list')}
-              buttons={[
-                { value: 'map', label: 'Kaart', icon: 'map' },
-                { value: 'list', label: 'Lijst', icon: 'format-list-bulleted' },
-              ]}
-              style={styles.segmentedButtons}
-            />
+    <View style={[styles.container, { backgroundColor: isDark ? '#0D0D14' : '#FAFAFA' }]}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Header with gradient */}
+        <LinearGradient
+          colors={['#FF6B35', '#FF3D00']}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.headerContent}>
+            <View style={styles.headerLeft}>
+              <MaterialCommunityIcons name="calendar-star" size={24} color="white" />
+              <Text variant="titleLarge" style={styles.headerTitle}>
+                Sessies
+              </Text>
+            </View>
+            {pendingRequestsCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationText}>{pendingRequestsCount}</Text>
+              </View>
+            )}
           </View>
+          
+          {/* Tab buttons in header */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity 
+              style={[styles.tabButton, mainTab === 'nearby' && styles.tabButtonActive]}
+              onPress={() => setMainTab('nearby')}
+            >
+              <MaterialCommunityIcons 
+                name="map-marker-radius" 
+                size={18} 
+                color={mainTab === 'nearby' ? '#FF6B35' : 'rgba(255,255,255,0.7)'} 
+              />
+              <Text style={[styles.tabText, mainTab === 'nearby' && styles.tabTextActive]}>
+                In de buurt
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tabButton, mainTab === 'mine' && styles.tabButtonActive]}
+              onPress={() => setMainTab('mine')}
+            >
+              <MaterialCommunityIcons 
+                name="account-circle" 
+                size={18} 
+                color={mainTab === 'mine' ? '#FF6B35' : 'rgba(255,255,255,0.7)'} 
+              />
+              <Text style={[styles.tabText, mainTab === 'mine' && styles.tabTextActive]}>
+                Mijn sessies
+              </Text>
+              {pendingRequestsCount > 0 && (
+                <View style={styles.tabBadge}>
+                  <Text style={styles.tabBadgeText}>{pendingRequestsCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+
+        {/* Nearby Sessions View */}
+        {mainTab === 'nearby' && (
+          <>
+            {/* View mode toggle */}
+            <View style={styles.viewModeContainer}>
+              <TouchableOpacity
+                style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
+                onPress={() => setViewMode('list')}
+              >
+                <MaterialCommunityIcons 
+                  name="format-list-bulleted" 
+                  size={20} 
+                  color={viewMode === 'list' ? '#FF6B35' : theme.colors.onSurfaceVariant} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.viewModeButton, viewMode === 'map' && styles.viewModeButtonActive]}
+                onPress={() => setViewMode('map')}
+              >
+                <MaterialCommunityIcons 
+                  name="map" 
+                  size={20} 
+                  color={viewMode === 'map' ? '#FF6B35' : theme.colors.onSurfaceVariant} 
+                />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }} />
+              <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                {sessions.length} sessie{sessions.length !== 1 ? 's' : ''} gevonden
+              </Text>
+            </View>
 
       {viewMode === 'map' ? (
         <View style={styles.mapContainer}>
@@ -613,31 +841,235 @@ export default function NearbyScreen() {
             initialRegion={{
               latitude: location?.lat || 52.3676,
               longitude: location?.lng || 4.9041,
-              latitudeDelta: 0.1,
-              longitudeDelta: 0.1,
+              latitudeDelta: 0.08,
+              longitudeDelta: 0.08,
             }}
+            onPress={() => setMapPreviewSession(null)}
+            showsUserLocation={false}
+            showsMyLocationButton={false}
+            customMapStyle={isDark ? darkMapStyle : []}
           >
+            {/* User location marker */}
             {location && (
               <Marker
                 coordinate={{ latitude: location.lat, longitude: location.lng }}
-                title="Jouw locatie"
-                pinColor="blue"
-              />
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <View style={styles.userMarkerOuter}>
+                  <View style={styles.userMarkerInner}>
+                    <View style={styles.userMarkerDot} />
+                  </View>
+                </View>
+              </Marker>
             )}
-            {sessions.map((session) => (
-              <Marker
-                key={session.id}
-                coordinate={{ latitude: session.lat, longitude: session.lng }}
-                title={session.title}
-                description={`${session.gymName} • ${session.slotsAvailable} plekken`}
-                onPress={() => setSelectedSession(session)}
-              />
-            ))}
+            
+            {/* Session markers with custom design */}
+            {sessions.map((session) => {
+              const workoutStyle = getWorkoutStyle(session.workoutType);
+              const status = getSessionStatus(session);
+              const isSelected = mapPreviewSession?.id === session.id;
+              
+              return (
+                <Marker
+                  key={session.id}
+                  coordinate={{ latitude: session.lat, longitude: session.lng }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setMapPreviewSession(session);
+                    // Animate to marker
+                    mapRef.current?.animateToRegion({
+                      latitude: session.lat,
+                      longitude: session.lng,
+                      latitudeDelta: 0.02,
+                      longitudeDelta: 0.02,
+                    }, 300);
+                  }}
+                  anchor={{ x: 0.5, y: 1 }}
+                >
+                  <View style={styles.customMarkerContainer}>
+                    {/* Pulse animation for live sessions */}
+                    {status === 'ongoing' && (
+                      <View style={styles.markerPulse} />
+                    )}
+                    <LinearGradient
+                      colors={isSelected ? ['#FF6B35', '#FF3D00'] : workoutStyle.gradient}
+                      style={[
+                        styles.customMarker,
+                        isSelected && styles.customMarkerSelected
+                      ]}
+                    >
+                      <MaterialCommunityIcons 
+                        name={workoutStyle.icon as any} 
+                        size={isSelected ? 20 : 16} 
+                        color="white" 
+                      />
+                    </LinearGradient>
+                    {/* Marker pointer */}
+                    <View style={[
+                      styles.markerPointer,
+                      { borderTopColor: isSelected ? '#FF3D00' : workoutStyle.gradient[1] }
+                    ]} />
+                    {/* Slots badge */}
+                    {session.slotsAvailable > 0 && (
+                      <View style={[styles.markerBadge, { backgroundColor: status === 'ongoing' ? '#00C853' : workoutStyle.gradient[0] }]}>
+                        <Text style={styles.markerBadgeText}>{session.slotsAvailable}</Text>
+                      </View>
+                    )}
+                  </View>
+                </Marker>
+              );
+            })}
           </MapView>
 
+          {/* My location button */}
+          {location && (
+            <TouchableOpacity 
+              style={[styles.myLocationButton, { backgroundColor: isDark ? '#1A1A2E' : 'white' }]}
+              onPress={() => {
+                mapRef.current?.animateToRegion({
+                  latitude: location.lat,
+                  longitude: location.lng,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }, 500);
+              }}
+            >
+              <MaterialCommunityIcons name="crosshairs-gps" size={22} color="#FF6B35" />
+            </TouchableOpacity>
+          )}
+
+          {/* Session count badge */}
+          <View style={[styles.mapSessionCount, { backgroundColor: isDark ? '#1A1A2E' : 'white' }]}>
+            <MaterialCommunityIcons name="calendar-multiple" size={16} color="#FF6B35" />
+            <Text style={[styles.mapSessionCountText, { color: theme.colors.onBackground }]}>
+              {sessions.length} sessie{sessions.length !== 1 ? 's' : ''}
+            </Text>
+          </View>
+
+          {/* Empty state overlay */}
           {sessions.length === 0 && (
-            <View style={[styles.noSessionsOverlay, { backgroundColor: theme.colors.surface }]}>
-              <Text variant="bodyLarge">Geen sessies in de buurt</Text>
+            <View style={[styles.noSessionsOverlay, { backgroundColor: isDark ? '#1A1A2E' : 'white' }]}>
+              <MaterialCommunityIcons name="calendar-search" size={24} color="#FF6B35" />
+              <Text variant="bodyMedium" style={{ color: theme.colors.onBackground, marginLeft: 10 }}>
+                Geen sessies in de buurt
+              </Text>
+            </View>
+          )}
+
+          {/* Floating preview card */}
+          {mapPreviewSession && (
+            <View style={styles.mapPreviewContainer}>
+              <TouchableOpacity 
+                style={[styles.mapPreviewCard, { backgroundColor: isDark ? '#1A1A2E' : 'white' }]}
+                onPress={() => {
+                  setSelectedSession(mapPreviewSession);
+                  setMapPreviewSession(null);
+                }}
+                activeOpacity={0.95}
+              >
+                {/* Colored top bar */}
+                <LinearGradient
+                  colors={getWorkoutStyle(mapPreviewSession.workoutType).gradient}
+                  style={styles.previewTopBar}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+                
+                <View style={styles.previewContent}>
+                  {/* Close button */}
+                  <TouchableOpacity 
+                    style={styles.previewCloseButton}
+                    onPress={() => setMapPreviewSession(null)}
+                  >
+                    <MaterialCommunityIcons name="close" size={18} color={theme.colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+                  
+                  {/* Header */}
+                  <View style={styles.previewHeader}>
+                    <View style={[
+                      styles.previewWorkoutIcon, 
+                      { backgroundColor: getWorkoutStyle(mapPreviewSession.workoutType).gradient[0] + '20' }
+                    ]}>
+                      <MaterialCommunityIcons 
+                        name={getWorkoutStyle(mapPreviewSession.workoutType).icon as any} 
+                        size={24} 
+                        color={getWorkoutStyle(mapPreviewSession.workoutType).gradient[0]} 
+                      />
+                    </View>
+                    <View style={styles.previewHeaderText}>
+                      <Text variant="titleMedium" style={[styles.previewTitle, { color: theme.colors.onBackground }]} numberOfLines={1}>
+                        {mapPreviewSession.title}
+                      </Text>
+                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                        {mapPreviewSession.owner?.name || 'Onbekend'}
+                      </Text>
+                    </View>
+                    {/* Status/Time */}
+                    {getSessionStatus(mapPreviewSession) === 'ongoing' ? (
+                      <View style={[styles.previewBadge, { backgroundColor: '#00C853' }]}>
+                        <Text style={styles.previewBadgeText}>LIVE</Text>
+                      </View>
+                    ) : getTimeUntil(mapPreviewSession.startTime) ? (
+                      <View style={[styles.previewBadge, { backgroundColor: getWorkoutStyle(mapPreviewSession.workoutType).gradient[0] }]}>
+                        <Text style={styles.previewBadgeText}>{getTimeUntil(mapPreviewSession.startTime)}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  
+                  {/* Info row */}
+                  <View style={styles.previewInfoRow}>
+                    <View style={styles.previewInfoItem}>
+                      <MaterialCommunityIcons name="map-marker" size={14} color={theme.colors.onSurfaceVariant} />
+                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }} numberOfLines={1}>
+                        {mapPreviewSession.gymName}
+                      </Text>
+                    </View>
+                    <View style={styles.previewInfoItem}>
+                      <MaterialCommunityIcons name="clock-outline" size={14} color={theme.colors.onSurfaceVariant} />
+                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>
+                        {formatDate(mapPreviewSession.startTime)}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {/* Footer */}
+                  <View style={styles.previewFooter}>
+                    <View style={styles.previewChips}>
+                      <View style={[
+                        styles.previewChip, 
+                        { backgroundColor: getWorkoutStyle(mapPreviewSession.workoutType).gradient[0] + '15' }
+                      ]}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: getWorkoutStyle(mapPreviewSession.workoutType).gradient[0] }}>
+                          {getLabel(WORKOUT_TYPES, mapPreviewSession.workoutType)}
+                        </Text>
+                      </View>
+                      <View style={[styles.previewChip, { backgroundColor: isDark ? '#252536' : '#F0F0F0' }]}>
+                        <Text style={{ fontSize: 11, fontWeight: '500', color: theme.colors.onSurfaceVariant }}>
+                          {mapPreviewSession.slotsAvailable}/{mapPreviewSession.slots} plekken
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <TouchableOpacity 
+                      style={styles.previewViewButton}
+                      onPress={() => {
+                        setSelectedSession(mapPreviewSession);
+                        setMapPreviewSession(null);
+                      }}
+                    >
+                      <LinearGradient
+                        colors={['#FF6B35', '#FF3D00']}
+                        style={styles.previewViewGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        <Text style={styles.previewViewText}>Bekijk</Text>
+                        <MaterialCommunityIcons name="chevron-right" size={16} color="white" />
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -647,22 +1079,38 @@ export default function NearbyScreen() {
           renderItem={renderSessionCard}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B35']} />
+          }
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons
-                name="calendar-blank-outline"
-                size={60}
-                color={theme.colors.onSurfaceVariant}
-              />
-              <Text variant="titleLarge" style={{ marginTop: 16 }}>
+              <LinearGradient
+                colors={['rgba(255,107,53,0.1)', 'rgba(255,107,53,0.05)']}
+                style={styles.emptyIconContainer}
+              >
+                <MaterialCommunityIcons name="calendar-search" size={48} color="#FF6B35" />
+              </LinearGradient>
+              <Text variant="titleLarge" style={{ marginTop: 20, color: theme.colors.onBackground, fontWeight: '700' }}>
                 Geen sessies gevonden
               </Text>
               <Text
                 variant="bodyMedium"
-                style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8 }}
+                style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8, paddingHorizontal: 32 }}
               >
-                Er zijn nog geen sessies gepland in jouw omgeving.
+                Er zijn nog geen sessies gepland in jouw omgeving. Maak er zelf een aan!
               </Text>
+              <TouchableOpacity style={styles.emptyButton} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={['#FF6B35', '#FF3D00']}
+                  style={styles.emptyButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <MaterialCommunityIcons name="plus" size={20} color="white" />
+                  <Text style={styles.emptyButtonText}>Sessie aanmaken</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           }
         />
@@ -673,31 +1121,106 @@ export default function NearbyScreen() {
       {/* My Sessions View */}
       {mainTab === 'mine' && (
         <>
-          {/* Filter tabs */}
-          <View style={styles.filterContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              <Chip
-                selected={sessionFilter === 'all'}
+          {/* Professional Filter tabs */}
+          <View style={styles.mineFilterContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 16 }}>
+              <TouchableOpacity
+                style={[styles.filterChip, sessionFilter === 'all' && styles.filterChipActive]}
                 onPress={() => setSessionFilter('all')}
-                showSelectedOverlay
               >
-                Alle ({mySessions.length})
-              </Chip>
-              <Chip
-                selected={sessionFilter === 'upcoming'}
+                <MaterialCommunityIcons 
+                  name="view-grid" 
+                  size={16} 
+                  color={sessionFilter === 'all' ? 'white' : theme.colors.onSurfaceVariant} 
+                />
+                <Text style={[styles.filterChipText, sessionFilter === 'all' && styles.filterChipTextActive]}>
+                  Alle
+                </Text>
+                <View style={[styles.filterCount, sessionFilter === 'all' && styles.filterCountActive]}>
+                  <Text style={[styles.filterCountText, sessionFilter === 'all' && styles.filterCountTextActive]}>
+                    {mySessions.length}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterChip, sessionFilter === 'upcoming' && styles.filterChipActive]}
                 onPress={() => setSessionFilter('upcoming')}
-                showSelectedOverlay
               >
-                Gepland ({mySessions.filter(s => getSessionStatus(s) !== 'past').length})
-              </Chip>
-              <Chip
-                selected={sessionFilter === 'past'}
+                <MaterialCommunityIcons 
+                  name="calendar-clock" 
+                  size={16} 
+                  color={sessionFilter === 'upcoming' ? 'white' : theme.colors.onSurfaceVariant} 
+                />
+                <Text style={[styles.filterChipText, sessionFilter === 'upcoming' && styles.filterChipTextActive]}>
+                  Actief
+                </Text>
+                <View style={[styles.filterCount, sessionFilter === 'upcoming' && styles.filterCountActive]}>
+                  <Text style={[styles.filterCountText, sessionFilter === 'upcoming' && styles.filterCountTextActive]}>
+                    {mySessions.filter(s => getSessionStatus(s) !== 'past').length}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterChip, sessionFilter === 'past' && styles.filterChipActive]}
                 onPress={() => setSessionFilter('past')}
-                showSelectedOverlay
               >
-                Afgelopen ({mySessions.filter(s => getSessionStatus(s) === 'past').length})
-              </Chip>
+                <MaterialCommunityIcons 
+                  name="history" 
+                  size={16} 
+                  color={sessionFilter === 'past' ? 'white' : theme.colors.onSurfaceVariant} 
+                />
+                <Text style={[styles.filterChipText, sessionFilter === 'past' && styles.filterChipTextActive]}>
+                  Afgelopen
+                </Text>
+                <View style={[styles.filterCount, sessionFilter === 'past' && styles.filterCountActive]}>
+                  <Text style={[styles.filterCountText, sessionFilter === 'past' && styles.filterCountTextActive]}>
+                    {mySessions.filter(s => getSessionStatus(s) === 'past').length}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </ScrollView>
+          </View>
+
+          {/* Stats overview */}
+          <View style={styles.statsRow}>
+            <View style={[styles.statCard, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}>
+              <LinearGradient
+                colors={['rgba(255,107,53,0.1)', 'rgba(255,107,53,0.05)']}
+                style={styles.statIconBg}
+              >
+                <MaterialCommunityIcons name="calendar-check" size={20} color="#FF6B35" />
+              </LinearGradient>
+              <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onBackground }]}>
+                {mySessions.filter(s => getSessionStatus(s) !== 'past').length}
+              </Text>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Actief</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}>
+              <LinearGradient
+                colors={['rgba(0,200,83,0.1)', 'rgba(0,200,83,0.05)']}
+                style={styles.statIconBg}
+              >
+                <MaterialCommunityIcons name="account-group" size={20} color="#00C853" />
+              </LinearGradient>
+              <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onBackground }]}>
+                {mySessions.reduce((acc, s) => acc + (s.joinRequests?.filter(r => r.status === 'accepted').length || 0), 0)}
+              </Text>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Deelnemers</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}>
+              <LinearGradient
+                colors={['rgba(124,77,255,0.1)', 'rgba(124,77,255,0.05)']}
+                style={styles.statIconBg}
+              >
+                <MaterialCommunityIcons name="account-clock" size={20} color="#7C4DFF" />
+              </LinearGradient>
+              <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onBackground }]}>
+                {pendingRequestsCount}
+              </Text>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Wachtend</Text>
+            </View>
           </View>
 
           <FlatList
@@ -705,26 +1228,46 @@ export default function NearbyScreen() {
             renderItem={renderMySessionCard}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
-            refreshing={loadingMine}
-            onRefresh={loadMySessions}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B35']} />
+            }
+            showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <MaterialCommunityIcons
-                  name={sessionFilter === 'past' ? 'history' : 'calendar-plus'}
-                  size={60}
-                  color={theme.colors.onSurfaceVariant}
-                />
-                <Text variant="titleLarge" style={{ marginTop: 16 }}>
+                <LinearGradient
+                  colors={['rgba(255,107,53,0.1)', 'rgba(255,107,53,0.05)']}
+                  style={styles.emptyIconContainer}
+                >
+                  <MaterialCommunityIcons 
+                    name={sessionFilter === 'past' ? 'history' : 'calendar-plus'} 
+                    size={48} 
+                    color="#FF6B35" 
+                  />
+                </LinearGradient>
+                <Text variant="titleLarge" style={{ marginTop: 20, color: theme.colors.onBackground, fontWeight: '700' }}>
                   {sessionFilter === 'past' ? 'Geen afgelopen sessies' : 'Geen sessies gepland'}
                 </Text>
                 <Text
                   variant="bodyMedium"
-                  style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8 }}
+                  style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8, paddingHorizontal: 32 }}
                 >
                   {sessionFilter === 'past' 
                     ? 'Je afgelopen sessies verschijnen hier.'
-                    : 'Maak een sessie aan en anderen kunnen meedoen!'}
+                    : 'Maak je eerste sessie aan en nodig gym buddies uit!'}
                 </Text>
+                {sessionFilter !== 'past' && (
+                  <TouchableOpacity style={styles.emptyButton} activeOpacity={0.8}>
+                    <LinearGradient
+                      colors={['#FF6B35', '#FF3D00']}
+                      style={styles.emptyButtonGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      <MaterialCommunityIcons name="plus" size={20} color="white" />
+                      <Text style={styles.emptyButtonText}>Nieuwe sessie</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
               </View>
             }
           />
@@ -735,92 +1278,183 @@ export default function NearbyScreen() {
         <Modal
           visible={!!selectedSession}
           onDismiss={() => setSelectedSession(null)}
-          contentContainerStyle={[styles.sessionModal, { backgroundColor: theme.colors.surface }]}
+          contentContainerStyle={[styles.sessionModal, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}
         >
-          {selectedSession && (
-            <>
-              <Text variant="headlineSmall" style={{ fontWeight: 'bold' }}>
-                {selectedSession.title}
-              </Text>
-
-              <View style={styles.modalInfo}>
-                <MaterialCommunityIcons name="account" size={20} color={theme.colors.primary} />
-                <Text variant="bodyLarge">
-                  {selectedSession.owner?.name || 'Onbekend'}
-                </Text>
-              </View>
-
-              <View style={styles.modalInfo}>
-                <MaterialCommunityIcons name="dumbbell" size={20} color={theme.colors.onSurfaceVariant} />
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {selectedSession.gymName}
-                </Text>
-              </View>
-
-              <View style={styles.modalInfo}>
-                <MaterialCommunityIcons name="clock-outline" size={20} color={theme.colors.onSurfaceVariant} />
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {formatDate(selectedSession.startTime)} • {selectedSession.durationMinutes} min
-                </Text>
-              </View>
-
-              <View style={styles.modalInfo}>
-                <MaterialCommunityIcons name="account-multiple" size={20} color={theme.colors.onSurfaceVariant} />
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {selectedSession.slotsAvailable} van {selectedSession.slots} plekken beschikbaar
-                </Text>
-              </View>
-
-              <View style={styles.modalChips}>
-                <Chip>{getLabel(WORKOUT_TYPES, selectedSession.workoutType)}</Chip>
-                <Chip>{getLabel(INTENSITIES, selectedSession.intensity)}</Chip>
-              </View>
-
-              {selectedSession.notes && (
-                <View style={styles.notesSection}>
-                  <Text variant="titleSmall">Notities</Text>
-                  <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-                    {selectedSession.notes}
+          {selectedSession && (() => {
+            const workoutStyle = getWorkoutStyle(selectedSession.workoutType);
+            const status = getSessionStatus(selectedSession);
+            return (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+                {/* Header with gradient accent */}
+                <LinearGradient
+                  colors={workoutStyle.gradient}
+                  style={styles.modalHeader}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.modalHeaderContent}>
+                    <View style={styles.modalIconContainer}>
+                      <MaterialCommunityIcons name={workoutStyle.icon as any} size={28} color="white" />
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.modalCloseButton}
+                      onPress={() => setSelectedSession(null)}
+                    >
+                      <MaterialCommunityIcons name="close" size={24} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Status badge */}
+                  <View style={styles.modalStatusBadge}>
+                    <MaterialCommunityIcons 
+                      name={status === 'ongoing' ? 'play-circle' : status === 'upcoming' ? 'clock-outline' : 'check-circle'} 
+                      size={14} 
+                      color="white" 
+                    />
+                    <Text style={styles.modalStatusText}>
+                      {status === 'ongoing' ? 'NU BEZIG' : status === 'upcoming' ? 'GEPLAND' : 'AFGELOPEN'}
+                    </Text>
+                  </View>
+                  
+                  <Text variant="headlineSmall" style={styles.modalTitle}>
+                    {selectedSession.title}
                   </Text>
-                </View>
-              )}
+                </LinearGradient>
 
-              <View style={styles.modalButtons}>
-                {selectedSession.myRequestStatus === 'pending' ? (
-                  <Button mode="outlined" disabled>
-                    Verzoek verzonden
-                  </Button>
-                ) : selectedSession.myRequestStatus === 'accepted' ? (
-                  <Button mode="contained" disabled>
-                    Je doet mee! ✓
-                  </Button>
-                ) : selectedSession.slotsAvailable > 0 ? (
-                  <Button
-                    mode="contained"
-                    onPress={() => handleRequestJoin(selectedSession)}
-                    loading={requestingJoin}
-                    disabled={requestingJoin}
-                  >
-                    Vraag om mee te doen
-                  </Button>
-                ) : (
-                  <Button mode="outlined" disabled>
-                    Geen plekken meer
-                  </Button>
-                )}
-                <Button mode="text" onPress={() => setSelectedSession(null)}>
-                  Sluiten
-                </Button>
-              </View>
-            </>
-          )}
+                {/* Content */}
+                <View style={styles.modalBody}>
+                  {/* Owner info */}
+                  <View style={styles.modalOwnerCard}>
+                    {selectedSession.owner?.avatarUrl ? (
+                      <Avatar.Image size={48} source={{ uri: selectedSession.owner.avatarUrl }} />
+                    ) : (
+                      <Avatar.Text
+                        size={48}
+                        label={selectedSession.owner?.name?.substring(0, 2).toUpperCase() || '??'}
+                        style={{ backgroundColor: workoutStyle.gradient[0] }}
+                      />
+                    )}
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text variant="titleMedium" style={{ fontWeight: '700', color: theme.colors.onBackground }}>
+                        {selectedSession.owner?.name || 'Onbekend'}
+                      </Text>
+                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                        Organisator
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Info cards */}
+                  <View style={styles.modalInfoGrid}>
+                    <View style={[styles.modalInfoCard, { backgroundColor: isDark ? '#252536' : '#F5F5F5' }]}>
+                      <MaterialCommunityIcons name="map-marker" size={20} color={workoutStyle.gradient[0]} />
+                      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>Locatie</Text>
+                      <Text variant="bodyMedium" style={{ fontWeight: '600', color: theme.colors.onBackground }} numberOfLines={1}>
+                        {selectedSession.gymName}
+                      </Text>
+                    </View>
+                    <View style={[styles.modalInfoCard, { backgroundColor: isDark ? '#252536' : '#F5F5F5' }]}>
+                      <MaterialCommunityIcons name="clock-outline" size={20} color={workoutStyle.gradient[0]} />
+                      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>Tijd</Text>
+                      <Text variant="bodyMedium" style={{ fontWeight: '600', color: theme.colors.onBackground }}>
+                        {formatDate(selectedSession.startTime)}
+                      </Text>
+                    </View>
+                    <View style={[styles.modalInfoCard, { backgroundColor: isDark ? '#252536' : '#F5F5F5' }]}>
+                      <MaterialCommunityIcons name="timer-outline" size={20} color={workoutStyle.gradient[0]} />
+                      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>Duur</Text>
+                      <Text variant="bodyMedium" style={{ fontWeight: '600', color: theme.colors.onBackground }}>
+                        {selectedSession.durationMinutes} min
+                      </Text>
+                    </View>
+                    <View style={[styles.modalInfoCard, { backgroundColor: isDark ? '#252536' : '#F5F5F5' }]}>
+                      <MaterialCommunityIcons name="account-multiple" size={20} color={workoutStyle.gradient[0]} />
+                      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>Plekken</Text>
+                      <Text variant="bodyMedium" style={{ fontWeight: '600', color: theme.colors.onBackground }}>
+                        {selectedSession.slotsAvailable}/{selectedSession.slots}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Workout type chips */}
+                  <View style={styles.modalChipsRow}>
+                    <View style={[styles.modalWorkoutChip, { backgroundColor: workoutStyle.gradient[0] + '20' }]}>
+                      <MaterialCommunityIcons name={workoutStyle.icon as any} size={16} color={workoutStyle.gradient[0]} />
+                      <Text style={[styles.modalChipText, { color: workoutStyle.gradient[0] }]}>
+                        {getLabel(WORKOUT_TYPES, selectedSession.workoutType)}
+                      </Text>
+                    </View>
+                    <View style={[styles.modalWorkoutChip, { backgroundColor: isDark ? '#252536' : '#F0F0F0' }]}>
+                      <MaterialCommunityIcons name="speedometer" size={16} color={theme.colors.onSurfaceVariant} />
+                      <Text style={[styles.modalChipText, { color: theme.colors.onSurfaceVariant }]}>
+                        {getLabel(INTENSITIES, selectedSession.intensity)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Notes */}
+                  {selectedSession.notes && (
+                    <View style={[styles.modalNotes, { backgroundColor: isDark ? '#252536' : '#F9F9F9' }]}>
+                      <MaterialCommunityIcons name="note-text" size={18} color={theme.colors.onSurfaceVariant} />
+                      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 10, flex: 1 }}>
+                        {selectedSession.notes}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Action button */}
+                  <View style={styles.modalActions}>
+                    {selectedSession.myRequestStatus === 'pending' ? (
+                      <View style={[styles.modalActionButton, { backgroundColor: '#FFF3E0' }]}>
+                        <MaterialCommunityIcons name="clock-outline" size={20} color="#FF6B35" />
+                        <Text style={[styles.modalActionText, { color: '#FF6B35' }]}>Verzoek verzonden</Text>
+                      </View>
+                    ) : selectedSession.myRequestStatus === 'accepted' ? (
+                      <View style={[styles.modalActionButton, { backgroundColor: '#E8F5E9' }]}>
+                        <MaterialCommunityIcons name="check-circle" size={20} color="#00C853" />
+                        <Text style={[styles.modalActionText, { color: '#00C853' }]}>Je doet mee!</Text>
+                      </View>
+                    ) : selectedSession.slotsAvailable > 0 ? (
+                      <TouchableOpacity 
+                        style={styles.modalJoinButton}
+                        onPress={() => handleRequestJoin(selectedSession)}
+                        disabled={requestingJoin}
+                        activeOpacity={0.8}
+                      >
+                        <LinearGradient
+                          colors={workoutStyle.gradient}
+                          style={styles.modalJoinGradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                        >
+                          {requestingJoin ? (
+                            <ActivityIndicator color="white" />
+                          ) : (
+                            <>
+                              <MaterialCommunityIcons name="plus" size={20} color="white" />
+                              <Text style={styles.modalJoinText}>Vraag om mee te doen</Text>
+                            </>
+                          )}
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={[styles.modalActionButton, { backgroundColor: isDark ? '#252536' : '#F0F0F0' }]}>
+                        <MaterialCommunityIcons name="account-off" size={20} color={theme.colors.onSurfaceVariant} />
+                        <Text style={[styles.modalActionText, { color: theme.colors.onSurfaceVariant }]}>Geen plekken meer</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </ScrollView>
+            );
+          })()}
         </Modal>
 
         {/* Edit Session Modal */}
         <Modal
           visible={showEditModal}
           onDismiss={() => setShowEditModal(false)}
-          contentContainerStyle={[styles.sessionModal, { backgroundColor: theme.colors.surface }]}
+          contentContainerStyle={[styles.sessionModal, { backgroundColor: theme.colors.surface, padding: 24 }]}
         >
           <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 16 }}>
             Sessie bewerken
@@ -868,7 +1502,7 @@ export default function NearbyScreen() {
         <Modal
           visible={!!selectedMySession && !showEditModal}
           onDismiss={() => setSelectedMySession(null)}
-          contentContainerStyle={[styles.sessionModal, { backgroundColor: theme.colors.surface, maxHeight: '80%' }]}
+          contentContainerStyle={[styles.sessionModal, { backgroundColor: theme.colors.surface, padding: 24 }]}
         >
           {selectedMySession && (
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -998,7 +1632,8 @@ export default function NearbyScreen() {
           )}
         </Modal>
       </Portal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -1006,26 +1641,96 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  mainTabContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
+  // Header styles
+  headerGradient: {
+    paddingBottom: 16,
   },
-  mainTabButtons: {
-    width: '100%',
-  },
-  header: {
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   headerTitle: {
     fontWeight: 'bold',
+    color: 'white',
   },
-  segmentedButtons: {
-    width: 180,
+  notificationBadge: {
+    backgroundColor: 'white',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationText: {
+    color: '#FF6B35',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  tabButtonActive: {
+    backgroundColor: 'white',
+  },
+  tabText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  tabTextActive: {
+    color: '#FF6B35',
+  },
+  tabBadge: {
+    backgroundColor: '#FF1744',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 4,
+  },
+  tabBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  viewModeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  viewModeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  viewModeButtonActive: {
+    backgroundColor: 'rgba(255,107,53,0.1)',
   },
   requestsSection: {
     marginTop: 4,
@@ -1057,6 +1762,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingIcon: {
+    width: 70,
+    height: 70,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   mapContainer: {
     flex: 1,
   },
@@ -1074,19 +1786,151 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingBottom: 120,
   },
+  // Session Card Styles
   sessionCard: {
-    marginBottom: 12,
-    borderRadius: 12,
+    marginBottom: 16,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    flexDirection: 'row',
+    overflow: 'hidden',
   },
+  cardAccent: {
+    width: 5,
+  },
+  cardContent: {
+    flex: 1,
+    padding: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  workoutIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  cardHeaderText: {
+    flex: 1,
+  },
+  sessionTitle: {
+    fontWeight: '700',
+  },
+  timeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 4,
+  },
+  timeBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  cardInfoSection: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  cardInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  cardChips: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  workoutChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  workoutChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  intensityChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  intensityChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  slotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  slotsBar: {
+    width: 40,
+    height: 6,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  slotsFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  // Empty state
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    marginTop: 40,
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyButton: {
+    marginTop: 24,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  emptyButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  emptyButtonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  // My Sessions specific styles  
   sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  sessionTitle: {
-    fontWeight: '600',
-    flex: 1,
   },
   sessionInfo: {
     flexDirection: 'row',
@@ -1102,17 +1946,591 @@ const styles = StyleSheet.create({
   chip: {
     height: 28,
   },
-  emptyContainer: {
-    flex: 1,
+  // New My Sessions Card Styles
+  mySessionCard: {
+    marginBottom: 16,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  myCardTopBar: {
+    height: 4,
+  },
+  myCardContent: {
+    padding: 16,
+  },
+  myCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 4,
+  },
+  statusBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  pendingBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  menuButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  myCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  myWorkoutIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
-    marginTop: 60,
+  },
+  myCardTitle: {
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  myCardInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 12,
+  },
+  myCardInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: '45%',
+  },
+  participantsProgress: {
+    marginBottom: 4,
+  },
+  participantsLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  progressBarContainer: {
+    height: 6,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  avatarStack: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  stackedAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'white',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pendingSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  pendingSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  pendingRequestItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  actionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  acceptButton: {
+    backgroundColor: '#00C853',
+    marginRight: 8,
+  },
+  declineButton: {
+    backgroundColor: 'rgba(255,23,68,0.1)',
+  },
+  notesPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 12,
+  },
+  // Mijn Sessies Filter & Stats
+  mineFilterContainer: {
+    paddingVertical: 12,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 25,
+    gap: 6,
+  },
+  filterChipActive: {
+    backgroundColor: '#FF6B35',
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  filterChipTextActive: {
+    color: 'white',
+  },
+  filterCount: {
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  filterCountActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  filterCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#666',
+  },
+  filterCountTextActive: {
+    color: 'white',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 10,
+    marginBottom: 8,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  statNumber: {
+    fontWeight: '800',
+  },
+  // Professional Modal Styles
+  modalHeader: {
+    padding: 18,
+    paddingBottom: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  modalIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 6,
+    marginBottom: 12,
+  },
+  modalStatusText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  modalTitle: {
+    color: 'white',
+    fontWeight: '800',
+    fontSize: 22,
+    marginTop: 4,
+  },
+  modalBody: {
+    padding: 20,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
+  modalOwnerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  modalInfoCard: {
+    width: '48%',
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'flex-start',
+  },
+  modalChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  modalWorkoutChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 25,
+    gap: 8,
+  },
+  modalChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modalNotes: {
+    flexDirection: 'row',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  modalActions: {
+    marginTop: 12,
+  },
+  modalActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 16,
+    gap: 10,
+  },
+  modalActionText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modalJoinButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    minHeight: 54,
+  },
+  modalJoinGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    minHeight: 54,
+    gap: 10,
+  },
+  modalJoinText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Map Styles
+  userMarkerOuter: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userMarkerInner: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 122, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userMarkerDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#007AFF',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  customMarkerContainer: {
+    alignItems: 'center',
+  },
+  markerPulse: {
+    position: 'absolute',
+    top: -4,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 200, 83, 0.3)',
+  },
+  customMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  customMarkerSelected: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 3,
+    borderColor: 'white',
+  },
+  markerPointer: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    marginTop: -2,
+  },
+  markerBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  markerBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  myLocationButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  mapSessionCount: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+    gap: 6,
+  },
+  mapSessionCountText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // Map Preview Card
+  mapPreviewContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 16,
+    right: 16,
+  },
+  mapPreviewCard: {
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  previewTopBar: {
+    height: 4,
+  },
+  previewContent: {
+    padding: 16,
+  },
+  previewCloseButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingRight: 32,
+  },
+  previewWorkoutIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  previewHeaderText: {
+    flex: 1,
+  },
+  previewTitle: {
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  previewBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  previewBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  previewInfoRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 16,
+  },
+  previewInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  previewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewChips: {
+    flexDirection: 'row',
+    gap: 8,
+    flex: 1,
+  },
+  previewChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  previewViewButton: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  previewViewGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  previewViewText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '700',
   },
   sessionModal: {
-    margin: 24,
-    padding: 24,
-    borderRadius: 16,
+    margin: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    maxHeight: '94%',
   },
   modalInfo: {
     flexDirection: 'row',

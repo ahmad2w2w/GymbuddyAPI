@@ -301,6 +301,60 @@ class ApiClient {
     );
   }
 
+  async getBlockedUsers() {
+    return this.request<{ success: boolean; data: Array<{ id: string; name: string; avatarUrl?: string; blockedAt: string }> }>(
+      '/users/blocked'
+    );
+  }
+
+  async unblockUser(userId: string) {
+    return this.request<{ success: boolean; data: { unblocked: boolean; message: string } }>(
+      `/users/${userId}/unblock`,
+      { method: 'POST' }
+    );
+  }
+
+  // Privacy Settings
+  async updatePrivacySettings(settings: {
+    profileVisibility?: 'everyone' | 'matches' | 'nobody';
+    showLocation?: boolean;
+    showOnlineStatus?: boolean;
+    showWorkoutHistory?: boolean;
+    allowMessages?: 'everyone' | 'matches';
+  }) {
+    return this.request<{ success: boolean; data: { updated: boolean } }>(
+      '/users/privacy',
+      { method: 'PUT', body: settings }
+    );
+  }
+
+  async getPrivacySettings() {
+    return this.request<{ 
+      success: boolean; 
+      data: {
+        profileVisibility: 'everyone' | 'matches' | 'nobody';
+        showLocation: boolean;
+        showOnlineStatus: boolean;
+        showWorkoutHistory: boolean;
+        allowMessages: 'everyone' | 'matches';
+      } 
+    }>('/users/privacy');
+  }
+
+  // Notification Settings
+  async updateNotificationSettings(settings: {
+    pushEnabled?: boolean;
+    matchNotifications?: boolean;
+    messageNotifications?: boolean;
+    sessionNotifications?: boolean;
+    marketingNotifications?: boolean;
+  }) {
+    return this.request<{ success: boolean; data: { updated: boolean } }>(
+      '/users/notifications',
+      { method: 'PUT', body: settings }
+    );
+  }
+
   // Password
   async forgotPassword(email: string) {
     return this.request<{ success: boolean; data: { message: string; devCode?: string } }>(

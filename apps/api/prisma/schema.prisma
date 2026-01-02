@@ -49,6 +49,12 @@ model User {
   // Badges (JSON array of badge IDs)
   badges          String   @default("[]")
   
+  // Privacy Settings (JSON)
+  privacySettings String   @default("{\"profileVisibility\":\"everyone\",\"showLocation\":true,\"showOnlineStatus\":true,\"showWorkoutHistory\":true,\"allowMessages\":\"everyone\"}")
+  
+  // Notification Settings (JSON)
+  notificationSettings String @default("{\"pushEnabled\":true,\"matchNotifications\":true,\"messageNotifications\":true,\"sessionNotifications\":true,\"marketingNotifications\":false}")
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   

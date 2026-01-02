@@ -185,7 +185,11 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#0D0D14' : '#FAFAFA' }]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        bounces={true}
+      >
         {/* Header with gradient */}
         <LinearGradient
           colors={['#FF6B35', '#FF3D00']}
@@ -591,7 +595,7 @@ export default function ProfileScreen() {
         </Text>
 
         {/* Bottom padding for tab bar */}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* Upgrade Modal */}
@@ -773,9 +777,10 @@ function StatItem({ value, label, icon, color }: { value: number; label: string;
 
 function QuickActionCard({ icon, label, color, onPress, isDark }: { icon: string; label: string; color: string; onPress: () => void; isDark: boolean }) {
   return (
-    <View 
+    <TouchableOpacity 
       style={[styles.quickActionCard, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}
-      onTouchEnd={onPress}
+      onPress={onPress}
+      activeOpacity={0.7}
     >
       <View style={[styles.quickActionIcon, { backgroundColor: color + '15' }]}>
         <MaterialCommunityIcons name={icon as any} size={24} color={color} />
@@ -783,14 +788,14 @@ function QuickActionCard({ icon, label, color, onPress, isDark }: { icon: string
       <Text variant="labelMedium" style={{ marginTop: 8, fontWeight: '600' }}>
         {label}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 function MenuItem({ icon, label, color, onPress, isDark }: { icon: string; label: string; color: string; onPress: () => void; isDark: boolean }) {
   const theme = useTheme();
   return (
-    <View style={styles.menuItem} onTouchEnd={onPress}>
+    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
       <View style={[styles.menuIcon, { backgroundColor: color + '15' }]}>
         <MaterialCommunityIcons name={icon as any} size={20} color={color} />
       </View>
@@ -798,7 +803,7 @@ function MenuItem({ icon, label, color, onPress, isDark }: { icon: string; label
         {label}
       </Text>
       <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
-    </View>
+    </TouchableOpacity>
   );
 }
 

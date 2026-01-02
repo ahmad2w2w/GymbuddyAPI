@@ -11,7 +11,8 @@ import { getLabel, GOALS, LEVELS, WEEKDAYS, TIME_SLOTS } from '@/lib/constants';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 120;
-const CARD_HEIGHT = SCREEN_HEIGHT * 0.65;
+// Adjusted card height to account for header, buttons, and tab bar
+const CARD_HEIGHT = SCREEN_HEIGHT * 0.55;
 
 export default function FeedScreen() {
   const theme = useTheme();
@@ -305,19 +306,19 @@ export default function FeedScreen() {
                   style={styles.cardGradient}
                 />
 
+                {/* Match Score Badge - positioned at top right of card */}
+                <View style={styles.matchBadge}>
+                  <LinearGradient
+                    colors={['#FF6B35', '#FF3D00']}
+                    style={styles.matchBadgeGradient}
+                  >
+                    <MaterialCommunityIcons name="fire" size={14} color="white" />
+                    <Text style={styles.matchBadgeText}>{profile.compatibilityScore}%</Text>
+                  </LinearGradient>
+                </View>
+
                 {/* Card Content */}
                 <View style={styles.cardContent}>
-                  {/* Match Score Badge */}
-                  <View style={styles.matchBadge}>
-                    <LinearGradient
-                      colors={['#FF6B35', '#FF3D00']}
-                      style={styles.matchBadgeGradient}
-                    >
-                      <MaterialCommunityIcons name="fire" size={14} color="white" />
-                      <Text style={styles.matchBadgeText}>{profile.compatibilityScore}%</Text>
-                    </LinearGradient>
-                  </View>
-
                   {/* Name & Verification */}
                   <View style={styles.nameRow}>
                     <Text variant="headlineMedium" style={styles.name}>
@@ -524,11 +525,11 @@ const styles = StyleSheet.create({
   cardContainer: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
   },
   card: {
-    position: 'absolute',
     width: SCREEN_WIDTH - 32,
     height: CARD_HEIGHT,
     borderRadius: 24,
@@ -537,6 +538,8 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
     overflow: 'hidden',
+    position: 'absolute',
+    top: 0,
   },
   likeLabel: {
     position: 'absolute',
@@ -591,7 +594,7 @@ const styles = StyleSheet.create({
   },
   matchBadge: {
     position: 'absolute',
-    top: -CARD_HEIGHT + 70,
+    top: 16,
     right: 16,
   },
   matchBadgeGradient: {
@@ -656,8 +659,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 20,
-    paddingVertical: 16,
-    paddingBottom: 100,
+    paddingVertical: 12,
+    paddingBottom: 95,
   },
   actionButton: {
     width: 64,

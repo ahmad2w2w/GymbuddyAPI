@@ -126,6 +126,229 @@ router.get('/feed', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// =====================================================
+// SPECIFIC ROUTES (must come before /:id routes)
+// =====================================================
+
+// GET /users/blocked - Get list of blocked users
+router.get('/blocked', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const blocks = await prisma.block.findMany({
+      where: { blockerId: req.user!.id },
+      include: {
+        blocked: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const blockedUsers = blocks.map(block => ({
+      id: block.blocked.id,
+      name: block.blocked.name,
+      avatarUrl: block.blocked.avatarUrl,
+      blockedAt: block.createdAt.toISOString()
+    }));
+
+    res.json({
+      success: true,
+      data: blockedUsers
+    });
+  } catch (error) {
+    console.error('Get blocked users error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
+// GET /users/privacy - Get privacy settings
+router.get('/privacy', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { privacySettings: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Gebruiker niet gevonden' });
+    }
+
+    // Handle case where field doesn't exist yet (before migration)
+    let settings = {};
+    try {
+      settings = JSON.parse(user.privacySettings || '{}');
+    } catch {
+      settings = {};
+    }
+    
+    // Ensure all fields have defaults
+    const defaultSettings = {
+      profileVisibility: 'everyone',
+      showLocation: true,
+      showOnlineStatus: true,
+      showWorkoutHistory: true,
+      allowMessages: 'everyone'
+    };
+
+    res.json({
+      success: true,
+      data: { ...defaultSettings, ...settings }
+    });
+  } catch (error) {
+    console.error('Get privacy settings error:', error);
+    // Return defaults on error (field might not exist yet)
+    res.json({
+      success: true,
+      data: {
+        profileVisibility: 'everyone',
+        showLocation: true,
+        showOnlineStatus: true,
+        showWorkoutHistory: true,
+        allowMessages: 'everyone'
+      }
+    });
+  }
+});
+
+// PUT /users/privacy - Update privacy settings
+router.put('/privacy', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { privacySettings: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Gebruiker niet gevonden' });
+    }
+
+    // Merge with existing settings
+    let currentSettings = {};
+    try {
+      currentSettings = JSON.parse(user.privacySettings || '{}');
+    } catch {
+      currentSettings = {};
+    }
+    const newSettings = { ...currentSettings, ...req.body };
+
+    // Validate settings
+    const validProfileVisibility = ['everyone', 'matches', 'nobody'];
+    const validAllowMessages = ['everyone', 'matches'];
+
+    if (newSettings.profileVisibility && !validProfileVisibility.includes(newSettings.profileVisibility)) {
+      return res.status(400).json({ success: false, error: 'Ongeldige profileVisibility waarde' });
+    }
+
+    if (newSettings.allowMessages && !validAllowMessages.includes(newSettings.allowMessages)) {
+      return res.status(400).json({ success: false, error: 'Ongeldige allowMessages waarde' });
+    }
+
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { privacySettings: JSON.stringify(newSettings) }
+    });
+
+    res.json({
+      success: true,
+      data: { updated: true }
+    });
+  } catch (error) {
+    console.error('Update privacy settings error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
+// GET /users/notifications - Get notification settings  
+router.get('/notifications', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { notificationSettings: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Gebruiker niet gevonden' });
+    }
+
+    let settings = {};
+    try {
+      settings = JSON.parse(user.notificationSettings || '{}');
+    } catch {
+      settings = {};
+    }
+    
+    // Ensure all fields have defaults
+    const defaultSettings = {
+      pushEnabled: true,
+      matchNotifications: true,
+      messageNotifications: true,
+      sessionNotifications: true,
+      marketingNotifications: false
+    };
+
+    res.json({
+      success: true,
+      data: { ...defaultSettings, ...settings }
+    });
+  } catch (error) {
+    console.error('Get notification settings error:', error);
+    // Return defaults on error
+    res.json({
+      success: true,
+      data: {
+        pushEnabled: true,
+        matchNotifications: true,
+        messageNotifications: true,
+        sessionNotifications: true,
+        marketingNotifications: false
+      }
+    });
+  }
+});
+
+// PUT /users/notifications - Update notification settings
+router.put('/notifications', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { notificationSettings: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Gebruiker niet gevonden' });
+    }
+
+    // Merge with existing settings
+    let currentSettings = {};
+    try {
+      currentSettings = JSON.parse(user.notificationSettings || '{}');
+    } catch {
+      currentSettings = {};
+    }
+    const newSettings = { ...currentSettings, ...req.body };
+
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { notificationSettings: JSON.stringify(newSettings) }
+    });
+
+    res.json({
+      success: true,
+      data: { updated: true }
+    });
+  } catch (error) {
+    console.error('Update notification settings error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
+// =====================================================
+// PARAMETERIZED ROUTES (must come after specific routes)
+// =====================================================
+
 // GET /users/:id - Get user profile
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -338,6 +561,32 @@ router.post('/:id/report', authMiddleware, async (req: AuthRequest, res: Respons
     });
   } catch (error) {
     console.error('Report user error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
+// POST /users/:id/unblock - Unblock a user
+router.post('/:id/unblock', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const unblockedUserId = req.params.id;
+    
+    const deleted = await prisma.block.deleteMany({
+      where: {
+        blockerId: req.user!.id,
+        blockedId: unblockedUserId
+      }
+    });
+
+    if (deleted.count === 0) {
+      return res.status(404).json({ success: false, error: 'Gebruiker niet geblokkeerd' });
+    }
+
+    res.json({
+      success: true,
+      data: { unblocked: true, message: 'Gebruiker gedeblokkeerd' }
+    });
+  } catch (error) {
+    console.error('Unblock user error:', error);
     res.status(500).json({ success: false, error: 'Er ging iets mis' });
   }
 });
