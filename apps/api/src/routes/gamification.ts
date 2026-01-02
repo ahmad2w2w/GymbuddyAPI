@@ -1,7 +1,6 @@
-import express from 'express';
+import express, { Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { authMiddleware } from '../lib/auth.js';
-import { z } from 'zod';
+import { authMiddleware, AuthRequest } from '../lib/auth.js';
 
 const router = express.Router();
 
@@ -113,9 +112,9 @@ function checkBadges(
 }
 
 // POST /gamification/check-in - Daily workout check-in
-router.post('/check-in', authMiddleware, async (req, res) => {
+router.post('/check-in', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.user!.id;
     const { gymName, workoutType, note } = req.body;
     
     const user = await prisma.user.findUnique({
@@ -267,9 +266,9 @@ router.post('/check-in', authMiddleware, async (req, res) => {
 });
 
 // GET /gamification/stats - Get user's gamification stats
-router.get('/stats', authMiddleware, async (req, res) => {
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.user!.id;
     
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -361,7 +360,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
 });
 
 // GET /gamification/leaderboard - Get top users
-router.get('/leaderboard', authMiddleware, async (req, res) => {
+router.get('/leaderboard', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const topUsers = await prisma.user.findMany({
       orderBy: { xp: 'desc' },
