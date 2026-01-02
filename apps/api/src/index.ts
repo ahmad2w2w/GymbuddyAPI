@@ -193,10 +193,9 @@ app.use((req, res) => {
   res.status(404).json({ success: false, error: 'Not found' });
 });
 
-const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
-
-httpServer.listen(Number(PORT), HOST, () => {
-  console.log(`🚀 GymBuddy API running on http://${HOST}:${PORT}`);
+// Render requires binding to 0.0.0.0
+httpServer.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`🚀 GymBuddy API running on port ${PORT}`);
   console.log(`🔌 WebSocket server ready for real-time chat`);
   console.log(`📚 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
