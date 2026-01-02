@@ -180,3 +180,6 @@ model PushToken {
   platform  String   // ios, android
   createdAt DateTime @default(now())
 }
+
+
+

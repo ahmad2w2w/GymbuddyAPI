@@ -59,3 +59,6 @@ After first deployment, seed the database:
 npx prisma db push
 npm run db:seed
 ```
+
+
+

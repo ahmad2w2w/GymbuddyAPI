@@ -240,3 +240,6 @@ const styles = StyleSheet.create({
   buttons: { padding: 16, gap: 12 },
   button: { borderRadius: 12 },
 });
+
+
+

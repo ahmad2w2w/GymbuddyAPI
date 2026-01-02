@@ -199,3 +199,6 @@ httpServer.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🔌 WebSocket server ready for real-time chat`);
   console.log(`📚 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+
+

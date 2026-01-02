@@ -150,3 +150,6 @@ export function calculateVerificationScore(user: User): number {
   
   return Math.min(score, 100);
 }
+
+
+

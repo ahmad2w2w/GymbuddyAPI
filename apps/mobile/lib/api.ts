@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.187:3001';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://gymbuddyapi.onrender.com';
 
 interface ApiOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
@@ -11,22 +11,34 @@ interface ApiOptions {
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
+  private tokenLoaded: boolean = false;
+  private tokenLoadPromise: Promise<void> | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
-    this.loadToken();
+    this.tokenLoadPromise = this.loadToken();
   }
 
   private async loadToken() {
     try {
       this.token = await AsyncStorage.getItem('auth_token');
+      console.log('Token loaded:', this.token ? 'yes' : 'no');
     } catch (e) {
       console.error('Failed to load token:', e);
+    } finally {
+      this.tokenLoaded = true;
+    }
+  }
+
+  async ensureTokenLoaded() {
+    if (!this.tokenLoaded && this.tokenLoadPromise) {
+      await this.tokenLoadPromise;
     }
   }
 
   setToken(token: string | null) {
     this.token = token;
+    this.tokenLoaded = true;
     if (token) {
       AsyncStorage.setItem('auth_token', token);
     } else {
@@ -39,6 +51,9 @@ class ApiClient {
   }
 
   async request<T>(endpoint: string, options: ApiOptions = {}): Promise<T> {
+    // Wait for token to be loaded before making request
+    await this.ensureTokenLoaded();
+    
     const { method = 'GET', body, headers = {} } = options;
 
     const config: RequestInit = {
@@ -226,6 +241,43 @@ class ApiClient {
     );
   }
 
+  async deleteSession(sessionId: string) {
+    return this.request<{ success: boolean; data: { message: string } }>(
+      `/sessions/${sessionId}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async updateSession(sessionId: string, data: Partial<CreateSessionInput>) {
+    return this.request<{ success: boolean; data: Session }>(
+      `/sessions/${sessionId}`,
+      {
+        method: 'PATCH',
+        body: data,
+      }
+    );
+  }
+
+  async removeParticipant(sessionId: string, requestId: string) {
+    return this.request<{ success: boolean; data: { message: string } }>(
+      `/sessions/${sessionId}/remove-participant`,
+      {
+        method: 'POST',
+        body: { requestId },
+      }
+    );
+  }
+
+  async duplicateSession(sessionId: string, startTime?: string) {
+    return this.request<{ success: boolean; data: Session }>(
+      `/sessions/${sessionId}/duplicate`,
+      {
+        method: 'POST',
+        body: startTime ? { startTime } : {},
+      }
+    );
+  }
+
   // Avatar
   async uploadAvatar(imageBase64: string) {
     return this.request<{ success: boolean; data: { avatarUrl: string } }>('/users/me/avatar', {
@@ -398,3 +450,6 @@ export interface CreateSessionInput {
   slots: number;
   notes?: string | null;
 }
+
+
+

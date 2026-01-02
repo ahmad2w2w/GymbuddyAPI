@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { api } from '@/lib/api';
 
-const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.187:3001';
+const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'https://gymbuddyapi.onrender.com';
 
 interface Message {
   id: string;
@@ -155,3 +155,6 @@ export function useSocket() {
     onMessageNotification,
   };
 }
+
+
+

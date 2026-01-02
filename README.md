@@ -319,3 +319,6 @@ MIT License - zie [LICENSE](LICENSE) voor details.
 ---
 
 Gemaakt met ❤️ voor de fitness community
+
+
+

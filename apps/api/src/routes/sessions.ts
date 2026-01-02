@@ -331,6 +331,212 @@ router.post('/:id/request', authMiddleware, async (req: AuthRequest, res: Respon
   }
 });
 
+// DELETE /sessions/:id - Delete a session
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.id;
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId }
+    });
+
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Sessie niet gevonden' });
+    }
+
+    if (session.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Niet geautoriseerd' });
+    }
+
+    // Delete all join requests first, then the session
+    await prisma.$transaction([
+      prisma.joinRequest.deleteMany({ where: { sessionId } }),
+      prisma.session.delete({ where: { id: sessionId } })
+    ]);
+
+    res.json({
+      success: true,
+      data: { message: 'Sessie verwijderd' }
+    });
+  } catch (error) {
+    console.error('Delete session error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
+// PATCH /sessions/:id - Update a session
+router.patch('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.id;
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId }
+    });
+
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Sessie niet gevonden' });
+    }
+
+    if (session.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Niet geautoriseerd' });
+    }
+
+    const updateData: any = {};
+    
+    if (req.body.title) updateData.title = req.body.title;
+    if (req.body.workoutType) updateData.workoutType = req.body.workoutType;
+    if (req.body.intensity) updateData.intensity = req.body.intensity;
+    if (req.body.gymName) updateData.gymName = req.body.gymName;
+    if (req.body.gymAddress !== undefined) updateData.gymAddress = req.body.gymAddress;
+    if (req.body.startTime) updateData.startTime = new Date(req.body.startTime);
+    if (req.body.durationMinutes) updateData.durationMinutes = req.body.durationMinutes;
+    if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+
+    const updatedSession = await prisma.session.update({
+      where: { id: sessionId },
+      data: updateData,
+      include: { owner: true }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        id: updatedSession.id,
+        ownerId: updatedSession.ownerId,
+        title: updatedSession.title,
+        workoutType: updatedSession.workoutType,
+        intensity: updatedSession.intensity,
+        gymName: updatedSession.gymName,
+        gymAddress: updatedSession.gymAddress,
+        lat: updatedSession.lat,
+        lng: updatedSession.lng,
+        startTime: updatedSession.startTime.toISOString(),
+        durationMinutes: updatedSession.durationMinutes,
+        slots: updatedSession.slots,
+        slotsAvailable: updatedSession.slotsAvailable,
+        notes: updatedSession.notes,
+        createdAt: updatedSession.createdAt.toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Update session error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
+// POST /sessions/:id/remove-participant - Remove an accepted participant
+router.post('/:id/remove-participant', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.id;
+    const { requestId } = req.body;
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId }
+    });
+
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Sessie niet gevonden' });
+    }
+
+    if (session.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Niet geautoriseerd' });
+    }
+
+    const joinRequest = await prisma.joinRequest.findUnique({
+      where: { id: requestId }
+    });
+
+    if (!joinRequest || joinRequest.sessionId !== sessionId) {
+      return res.status(404).json({ success: false, error: 'Deelnemer niet gevonden' });
+    }
+
+    if (joinRequest.status !== 'accepted') {
+      return res.status(400).json({ success: false, error: 'Deelnemer is niet geaccepteerd' });
+    }
+
+    await prisma.$transaction([
+      prisma.joinRequest.delete({ where: { id: requestId } }),
+      prisma.session.update({
+        where: { id: sessionId },
+        data: { slotsAvailable: session.slotsAvailable + 1 }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      data: { message: 'Deelnemer verwijderd' }
+    });
+  } catch (error) {
+    console.error('Remove participant error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
+// POST /sessions/:id/duplicate - Duplicate a session
+router.post('/:id/duplicate', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const sessionId = req.params.id;
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId }
+    });
+
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Sessie niet gevonden' });
+    }
+
+    if (session.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Niet geautoriseerd' });
+    }
+
+    // Create new session with same details but new time
+    const newStartTime = req.body.startTime ? new Date(req.body.startTime) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const newSession = await prisma.session.create({
+      data: {
+        ownerId: session.ownerId,
+        title: session.title,
+        workoutType: session.workoutType,
+        intensity: session.intensity,
+        gymName: session.gymName,
+        gymAddress: session.gymAddress,
+        lat: session.lat,
+        lng: session.lng,
+        startTime: newStartTime,
+        durationMinutes: session.durationMinutes,
+        slots: session.slots,
+        slotsAvailable: session.slots,
+        notes: session.notes
+      },
+      include: { owner: true }
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: newSession.id,
+        ownerId: newSession.ownerId,
+        title: newSession.title,
+        workoutType: newSession.workoutType,
+        intensity: newSession.intensity,
+        gymName: newSession.gymName,
+        gymAddress: newSession.gymAddress,
+        lat: newSession.lat,
+        lng: newSession.lng,
+        startTime: newSession.startTime.toISOString(),
+        durationMinutes: newSession.durationMinutes,
+        slots: newSession.slots,
+        slotsAvailable: newSession.slotsAvailable,
+        notes: newSession.notes,
+        createdAt: newSession.createdAt.toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Duplicate session error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
 // POST /sessions/:id/handle-request - Accept or decline a join request
 router.post('/:id/handle-request', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
@@ -406,3 +612,6 @@ router.post('/:id/handle-request', authMiddleware, async (req: AuthRequest, res:
 });
 
 export default router;
+
+
+

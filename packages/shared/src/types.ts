@@ -181,3 +181,6 @@ export interface SessionFilters {
   timeTo?: string;
   workoutType?: WorkoutType;
 }
+
+
+
