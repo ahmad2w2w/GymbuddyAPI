@@ -4,7 +4,6 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from './prisma.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export interface JwtPayload {
   userId: string;
@@ -19,7 +18,7 @@ export interface AuthRequest extends Request {
 }
 
 export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' } as jwt.SignOptions);
 }
 
 export function verifyToken(token: string): JwtPayload {
