@@ -4,6 +4,7 @@ import { Text, Button, useTheme, Card, Chip, IconButton, SegmentedButtons, Activ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { api, Session, JoinRequest } from '@/lib/api';
@@ -60,6 +61,7 @@ const getSessionStatus = (session: Session): SessionStatus => {
 
 export default function NearbyScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { user } = useAuth();
   const mapRef = useRef<MapView>(null);
   const colorScheme = useColorScheme();
@@ -465,16 +467,32 @@ export default function NearbyScreen() {
         <View style={styles.cardContent}>
           {/* Header row */}
           <View style={styles.cardHeader}>
-            <View style={[styles.workoutIconContainer, { backgroundColor: workoutStyle.gradient[0] + '20' }]}>
-              <MaterialCommunityIcons name={workoutStyle.icon as any} size={24} color={workoutStyle.gradient[0]} />
-            </View>
+            {/* Owner avatar instead of workout icon */}
+            {item.owner?.avatarUrl ? (
+              <Avatar.Image size={44} source={{ uri: item.owner.avatarUrl }} />
+            ) : (
+              <Avatar.Text 
+                size={44} 
+                label={item.owner?.name?.substring(0, 1).toUpperCase() || '?'} 
+                style={{ backgroundColor: workoutStyle.gradient[0] }}
+              />
+            )}
             <View style={styles.cardHeaderText}>
               <Text variant="titleMedium" style={[styles.sessionTitle, { color: theme.colors.onBackground }]} numberOfLines={1}>
                 {item.title}
               </Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {item.owner?.name || 'Onbekend'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                  {item.owner?.name || 'Onbekend'}
+                </Text>
+                {item.owner?.level && (
+                  <View style={[styles.levelBadge, { backgroundColor: workoutStyle.gradient[0] + '20' }]}>
+                    <Text style={[styles.levelBadgeText, { color: workoutStyle.gradient[0] }]}>
+                      {item.owner.level === 'beginner' ? '🌱' : item.owner.level === 'intermediate' ? '💪' : '🔥'}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
             {/* Time badge */}
             {status === 'ongoing' ? (
@@ -530,24 +548,35 @@ export default function NearbyScreen() {
               </View>
             </View>
             
-            {/* Slots indicator */}
+            {/* Slots indicator - clearer text */}
             <View style={styles.slotsContainer}>
-              <View style={styles.slotsBar}>
-                <View 
-                  style={[
-                    styles.slotsFill, 
-                    { 
-                      width: `${((item.slots - item.slotsAvailable) / item.slots) * 100}%`,
-                      backgroundColor: item.slotsAvailable === 0 ? '#FF1744' : workoutStyle.gradient[0] 
-                    }
-                  ]} 
-                />
-              </View>
-              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {item.slotsAvailable}/{item.slots}
+              <MaterialCommunityIcons 
+                name={item.slotsAvailable === 0 ? 'account-group' : 'account-multiple-plus'} 
+                size={14} 
+                color={item.slotsAvailable === 0 ? '#FF1744' : workoutStyle.gradient[0]} 
+              />
+              <Text variant="labelSmall" style={{ 
+                color: item.slotsAvailable === 0 ? '#FF1744' : theme.colors.onSurfaceVariant,
+                fontWeight: item.slotsAvailable === 0 ? '700' : '500'
+              }}>
+                {item.slotsAvailable === 0 
+                  ? 'Vol' 
+                  : item.slotsAvailable === 1 
+                    ? '1 plek vrij' 
+                    : `${item.slotsAvailable} plekken vrij`}
               </Text>
             </View>
           </View>
+          
+          {/* Notes preview if available */}
+          {item.notes && (
+            <View style={styles.notesPreview}>
+              <MaterialCommunityIcons name="format-quote-open" size={12} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1, fontStyle: 'italic' }} numberOfLines={1}>
+                {item.notes}
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -1210,7 +1239,7 @@ export default function NearbyScreen() {
         </View>
       ) : (
         <FlatList
-          data={sessions}
+          data={sessions.filter(s => s.myJoinStatus !== 'declined')}
           renderItem={renderSessionCard}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
@@ -1235,7 +1264,11 @@ export default function NearbyScreen() {
               >
                 Er zijn nog geen sessies gepland in jouw omgeving. Maak er zelf een aan!
               </Text>
-              <TouchableOpacity style={styles.emptyButton} activeOpacity={0.8}>
+              <TouchableOpacity 
+                style={styles.emptyButton} 
+                activeOpacity={0.8}
+                onPress={() => router.push('/(tabs)/create')}
+              >
                 <LinearGradient
                   colors={['#FF6B35', '#FF3D00']}
                   style={styles.emptyButtonGradient}
@@ -1991,6 +2024,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  levelBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  levelBadgeText: {
+    fontSize: 10,
+  },
   cardInfoSection: {
     gap: 8,
     marginBottom: 12,
@@ -2250,9 +2291,11 @@ const styles = StyleSheet.create({
   notesPreview: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
-    borderRadius: 10,
-    marginTop: 12,
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
   },
   // Mijn Sessies Filter & Stats
   mineFilterContainer: {
