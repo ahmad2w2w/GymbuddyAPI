@@ -229,6 +229,61 @@ router.get('/mine', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// GET /sessions/joined - Get sessions the user has joined or requested to join
+router.get('/joined', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const currentUser = await prisma.user.findUnique({
+      where: { id: req.user!.id }
+    });
+
+    // Find all join requests by this user
+    const joinRequests = await prisma.joinRequest.findMany({
+      where: { 
+        requesterId: req.user!.id,
+        status: { in: ['pending', 'accepted'] } // Only show pending and accepted
+      },
+      include: {
+        session: {
+          include: {
+            owner: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const sessionData = joinRequests.map(jr => ({
+      id: jr.session.id,
+      ownerId: jr.session.ownerId,
+      owner: toUserProfile(jr.session.owner, currentUser!),
+      title: jr.session.title,
+      workoutType: jr.session.workoutType,
+      intensity: jr.session.intensity,
+      gymName: jr.session.gymName,
+      gymAddress: jr.session.gymAddress,
+      lat: jr.session.lat,
+      lng: jr.session.lng,
+      startTime: jr.session.startTime.toISOString(),
+      durationMinutes: jr.session.durationMinutes,
+      slots: jr.session.slots,
+      slotsAvailable: jr.session.slotsAvailable,
+      notes: jr.session.notes,
+      createdAt: jr.session.createdAt.toISOString(),
+      // Include the user's join status
+      myJoinStatus: jr.status as 'pending' | 'accepted',
+      myJoinRequestId: jr.id
+    }));
+
+    res.json({
+      success: true,
+      data: sessionData
+    });
+  } catch (error) {
+    console.error('Get joined sessions error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
 // GET /sessions/:id - Get session by ID
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

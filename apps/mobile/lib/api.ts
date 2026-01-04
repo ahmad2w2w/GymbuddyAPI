@@ -221,6 +221,10 @@ class ApiClient {
     return this.request<{ success: boolean; data: Session[] }>('/sessions/mine');
   }
 
+  async getJoinedSessions() {
+    return this.request<{ success: boolean; data: Session[] }>('/sessions/joined');
+  }
+
   async getSession(id: string) {
     return this.request<{ success: boolean; data: Session }>(`/sessions/${id}`);
   }

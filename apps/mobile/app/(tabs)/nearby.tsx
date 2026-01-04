@@ -87,9 +87,10 @@ export default function NearbyScreen() {
 
   // My sessions state
   const [mySessions, setMySessions] = useState<Session[]>([]);
+  const [joinedSessions, setJoinedSessions] = useState<Session[]>([]);
   const [loadingMine, setLoadingMine] = useState(false);
   const [handlingRequest, setHandlingRequest] = useState<string | null>(null);
-  const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'past' | 'joined'>('all');
   
   // My session actions state
   const [selectedMySession, setSelectedMySession] = useState<Session | null>(null);
@@ -219,9 +220,17 @@ export default function NearbyScreen() {
   const loadMySessions = useCallback(async () => {
     try {
       setLoadingMine(true);
-      const response = await api.getMySessions();
-      if (response.success) {
-        setMySessions(response.data);
+      // Load both created sessions and joined sessions in parallel
+      const [myResponse, joinedResponse] = await Promise.all([
+        api.getMySessions(),
+        api.getJoinedSessions()
+      ]);
+      
+      if (myResponse.success) {
+        setMySessions(myResponse.data);
+      }
+      if (joinedResponse.success) {
+        setJoinedSessions(joinedResponse.data);
       }
     } catch (error) {
       console.error('Load my sessions error:', error);
@@ -588,12 +597,14 @@ export default function NearbyScreen() {
   }, 0);
 
   // Filter sessions based on status
-  const filteredMySessions = mySessions.filter(session => {
-    if (sessionFilter === 'all') return true;
-    const status = getSessionStatus(session);
-    if (sessionFilter === 'upcoming') return status === 'upcoming' || status === 'ongoing';
-    return status === 'past';
-  });
+  const filteredMySessions = sessionFilter === 'joined' 
+    ? joinedSessions // Show joined sessions when that filter is active
+    : mySessions.filter(session => {
+        if (sessionFilter === 'all') return true;
+        const status = getSessionStatus(session);
+        if (sessionFilter === 'upcoming') return status === 'upcoming' || status === 'ongoing';
+        return status === 'past';
+      });
 
   // Session status badge component
   const StatusBadge = ({ status }: { status: SessionStatus }) => {
@@ -612,6 +623,116 @@ export default function NearbyScreen() {
       >
         {config.text}
       </Chip>
+    );
+  };
+
+  // Card for sessions the user has joined (different from sessions they created)
+  const renderJoinedSessionCard = ({ item }: { item: Session }) => {
+    const status = getSessionStatus(item);
+    const isPast = status === 'past';
+    const workoutStyle = getWorkoutStyle(item.workoutType);
+    const timeUntil = getTimeUntil(item.startTime);
+    
+    return (
+      <TouchableOpacity 
+        style={[
+          styles.mySessionCard, 
+          { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' },
+          isPast && { opacity: 0.6 }
+        ]}
+        onPress={() => setSelectedSession(item)}
+        activeOpacity={0.7}
+      >
+        {/* Top colored bar - purple for joined sessions */}
+        <LinearGradient
+          colors={item.myJoinStatus === 'accepted' ? ['#00C853', '#00E676'] : ['#FFA000', '#FFB300']}
+          style={styles.myCardTopBar}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        />
+
+        <View style={styles.myCardContent}>
+          {/* Header Row */}
+          <View style={styles.myCardHeader}>
+            {/* Join status badge */}
+            <View style={[
+              styles.statusBadge,
+              { backgroundColor: item.myJoinStatus === 'accepted' ? '#00C853' : '#FFA000' }
+            ]}>
+              <MaterialCommunityIcons 
+                name={item.myJoinStatus === 'accepted' ? 'check-circle' : 'clock-outline'} 
+                size={12} 
+                color="white" 
+              />
+              <Text style={styles.statusBadgeText}>
+                {item.myJoinStatus === 'accepted' ? 'Geaccepteerd' : 'Wacht op goedkeuring'}
+              </Text>
+            </View>
+            
+            {/* Time until */}
+            {status !== 'past' && timeUntil && (
+              <View style={[styles.statusBadge, { backgroundColor: workoutStyle.gradient[0], marginLeft: 8 }]}>
+                <MaterialCommunityIcons name="clock-outline" size={12} color="white" />
+                <Text style={styles.statusBadgeText}>{timeUntil}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Owner info */}
+          <View style={styles.myCardTitleRow}>
+            {item.owner?.avatarUrl ? (
+              <Avatar.Image size={40} source={{ uri: item.owner.avatarUrl }} />
+            ) : (
+              <Avatar.Text 
+                size={40} 
+                label={item.owner?.name?.substring(0, 1).toUpperCase() || '?'} 
+                style={{ backgroundColor: workoutStyle.gradient[0] }}
+              />
+            )}
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text variant="titleMedium" style={[styles.myCardTitle, { color: theme.colors.onBackground }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                Door {item.owner?.name || 'Onbekend'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Info Grid */}
+          <View style={styles.myCardInfoGrid}>
+            <View style={styles.myCardInfoItem}>
+              <MaterialCommunityIcons name="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1 }} numberOfLines={1}>
+                {item.gymName}
+              </Text>
+            </View>
+            <View style={styles.myCardInfoItem}>
+              <MaterialCommunityIcons name="calendar-clock" size={16} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                {formatDate(item.startTime)}
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                • {item.durationMinutes} min
+              </Text>
+            </View>
+          </View>
+
+          {/* Workout type chips */}
+          <View style={[styles.cardChips, { marginTop: 12 }]}>
+            <View style={[styles.workoutChip, { backgroundColor: workoutStyle.gradient[0] + '15' }]}>
+              <Text style={[styles.workoutChipText, { color: workoutStyle.gradient[0] }]}>
+                {getLabel(WORKOUT_TYPES, item.workoutType)}
+              </Text>
+            </View>
+            <View style={[styles.intensityChip, { backgroundColor: isDark ? '#252536' : '#F0F0F0' }]}>
+              <Text style={[styles.intensityChipText, { color: theme.colors.onSurfaceVariant }]}>
+                {getLabel(INTENSITIES, item.intensity)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -659,11 +780,13 @@ export default function NearbyScreen() {
               </Text>
             </View>
             
-            {/* Pending notification */}
+            {/* Pending notification - more descriptive */}
             {pendingRequests.length > 0 && (
               <View style={styles.pendingBadge}>
                 <MaterialCommunityIcons name="account-clock" size={12} color="white" />
-                <Text style={styles.pendingBadgeText}>{pendingRequests.length}</Text>
+                <Text style={styles.pendingBadgeText}>
+                  {pendingRequests.length} {pendingRequests.length === 1 ? 'aanvraag' : 'aanvragen'}
+                </Text>
               </View>
             )}
             
@@ -729,17 +852,31 @@ export default function NearbyScreen() {
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                 {formatDate(item.startTime)}
               </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                • {item.durationMinutes} min
+              </Text>
             </View>
           </View>
+          
+          {/* Notes preview if available */}
+          {item.notes && (
+            <View style={[styles.notesPreview, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderRadius: 8, padding: 8, marginTop: 8 }]}>
+              <MaterialCommunityIcons name="note-text-outline" size={14} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1, fontStyle: 'italic' }} numberOfLines={2}>
+                {item.notes}
+              </Text>
+            </View>
+          )}
 
-          {/* Participants Progress Bar */}
+          {/* Participants Progress Bar - Clearer text */}
           <View style={styles.participantsProgress}>
             <View style={styles.participantsLabels}>
               <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                Deelnemers
-              </Text>
-              <Text variant="labelMedium" style={{ color: workoutStyle.gradient[0], fontWeight: '700' }}>
-                {item.slots - item.slotsAvailable}/{item.slots}
+                {item.slotsAvailable === 0 
+                  ? '✅ Vol - alle plekken bezet' 
+                  : item.slotsAvailable === item.slots 
+                    ? `Nog niemand aangemeld (${item.slots} ${item.slots === 1 ? 'plek' : 'plekken'})`
+                    : `${item.slots - item.slotsAvailable} aangemeld, ${item.slotsAvailable} ${item.slotsAvailable === 1 ? 'plek' : 'plekken'} vrij`}
               </Text>
             </View>
             <View style={styles.progressBarContainer}>
@@ -1348,6 +1485,26 @@ export default function NearbyScreen() {
                   </Text>
                 </View>
               </TouchableOpacity>
+
+              {/* Joined sessions tab */}
+              <TouchableOpacity
+                style={[styles.filterChip, sessionFilter === 'joined' && styles.filterChipActive, { backgroundColor: sessionFilter === 'joined' ? '#7C4DFF' : undefined }]}
+                onPress={() => setSessionFilter('joined')}
+              >
+                <MaterialCommunityIcons 
+                  name="account-arrow-right" 
+                  size={16} 
+                  color={sessionFilter === 'joined' ? 'white' : theme.colors.onSurfaceVariant} 
+                />
+                <Text style={[styles.filterChipText, sessionFilter === 'joined' && styles.filterChipTextActive]}>
+                  Gejoind
+                </Text>
+                <View style={[styles.filterCount, sessionFilter === 'joined' && styles.filterCountActive]}>
+                  <Text style={[styles.filterCountText, sessionFilter === 'joined' && styles.filterCountTextActive]}>
+                    {joinedSessions.length}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </ScrollView>
           </View>
 
@@ -1393,7 +1550,7 @@ export default function NearbyScreen() {
 
           <FlatList
             data={filteredMySessions}
-            renderItem={renderMySessionCard}
+            renderItem={sessionFilter === 'joined' ? renderJoinedSessionCard : renderMySessionCard}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             refreshControl={
@@ -1403,28 +1560,38 @@ export default function NearbyScreen() {
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <LinearGradient
-                  colors={['rgba(255,107,53,0.1)', 'rgba(255,107,53,0.05)']}
+                  colors={sessionFilter === 'joined' ? ['rgba(124,77,255,0.1)', 'rgba(124,77,255,0.05)'] : ['rgba(255,107,53,0.1)', 'rgba(255,107,53,0.05)']}
                   style={styles.emptyIconContainer}
                 >
                   <MaterialCommunityIcons 
-                    name={sessionFilter === 'past' ? 'history' : 'calendar-plus'} 
+                    name={sessionFilter === 'joined' ? 'account-arrow-right' : sessionFilter === 'past' ? 'history' : 'calendar-plus'} 
                     size={48} 
-                    color="#FF6B35" 
+                    color={sessionFilter === 'joined' ? '#7C4DFF' : '#FF6B35'} 
                   />
                 </LinearGradient>
                 <Text variant="titleLarge" style={{ marginTop: 20, color: theme.colors.onBackground, fontWeight: '700' }}>
-                  {sessionFilter === 'past' ? 'Geen afgelopen sessies' : 'Geen sessies gepland'}
+                  {sessionFilter === 'joined' 
+                    ? 'Nog geen sessies gejoind' 
+                    : sessionFilter === 'past' 
+                      ? 'Geen afgelopen sessies' 
+                      : 'Geen sessies gepland'}
                 </Text>
                 <Text
                   variant="bodyMedium"
                   style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8, paddingHorizontal: 32 }}
                 >
-                  {sessionFilter === 'past' 
-                    ? 'Je afgelopen sessies verschijnen hier.'
-                    : 'Maak je eerste sessie aan en nodig gym buddies uit!'}
+                  {sessionFilter === 'joined'
+                    ? 'Sessies waar je aan meedoet verschijnen hier. Zoek sessies in de buurt om mee te doen!'
+                    : sessionFilter === 'past' 
+                      ? 'Je afgelopen sessies verschijnen hier.'
+                      : 'Maak je eerste sessie aan en nodig gym buddies uit!'}
                 </Text>
-                {sessionFilter !== 'past' && (
-                  <TouchableOpacity style={styles.emptyButton} activeOpacity={0.8}>
+                {sessionFilter !== 'past' && sessionFilter !== 'joined' && (
+                  <TouchableOpacity 
+                    style={styles.emptyButton} 
+                    activeOpacity={0.8}
+                    onPress={() => router.push('/(tabs)/create')}
+                  >
                     <LinearGradient
                       colors={['#FF6B35', '#FF3D00']}
                       style={styles.emptyButtonGradient}
@@ -1433,6 +1600,23 @@ export default function NearbyScreen() {
                     >
                       <MaterialCommunityIcons name="plus" size={20} color="white" />
                       <Text style={styles.emptyButtonText}>Nieuwe sessie</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+                {sessionFilter === 'joined' && (
+                  <TouchableOpacity 
+                    style={styles.emptyButton} 
+                    activeOpacity={0.8}
+                    onPress={() => setMainTab('nearby')}
+                  >
+                    <LinearGradient
+                      colors={['#7C4DFF', '#651FFF']}
+                      style={styles.emptyButtonGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      <MaterialCommunityIcons name="map-search" size={20} color="white" />
+                      <Text style={styles.emptyButtonText}>Zoek sessies</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 )}
