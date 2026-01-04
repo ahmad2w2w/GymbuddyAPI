@@ -637,6 +637,8 @@ export interface Session {
   createdAt: string;
   joinRequests?: JoinRequest[];
   myRequestStatus?: string | null;
+  // Join status for current user: 'none' | 'pending' | 'accepted' | 'declined'
+  myJoinStatus?: 'none' | 'pending' | 'accepted' | 'declined';
 }
 
 export interface JoinRequest {

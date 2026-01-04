@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,6 +6,9 @@ import {
   ScrollView,
   useColorScheme,
   Alert,
+  Linking,
+  Platform,
+  AppState,
 } from 'react-native';
 import { Text, TextInput, ActivityIndicator } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,15 +43,46 @@ export default function StartTrainingScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Track if user went to settings
+  const waitingForSettings = useRef(false);
+  const appState = useRef(AppState.currentState);
+
   useEffect(() => {
     getLocation();
   }, []);
 
-  const getLocation = async () => {
+  // Listen for app state changes (when user comes back from settings)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        if (waitingForSettings.current) {
+          waitingForSettings.current = false;
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === 'granted') {
+            fetchLocationOnly();
+          }
+        }
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const openSettings = () => {
+    waitingForSettings.current = true;
+    if (Platform.OS === 'ios') {
+      Linking.openURL('app-settings:');
+    } else {
+      Linking.openSettings();
+    }
+  };
+
+  // Fetch location without permission prompts
+  const fetchLocationOnly = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      
       const loc = await Location.getCurrentPositionAsync({});
       setLocation({
         lat: loc.coords.latitude,
@@ -56,6 +90,48 @@ export default function StartTrainingScreen() {
       });
     } catch (error) {
       console.error('Location error:', error);
+    }
+  };
+
+  const getLocation = async () => {
+    try {
+      // Check existing permission status first
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      
+      if (existingStatus === 'denied') {
+        Alert.alert(
+          'Locatie nodig',
+          'Je hebt locatie toegang geweigerd. Ga naar Instellingen om dit aan te zetten.',
+          [
+            { text: 'Annuleren', style: 'cancel' },
+            { text: 'Open Instellingen', onPress: openSettings }
+          ]
+        );
+        return;
+      }
+      
+      if (existingStatus === 'granted') {
+        fetchLocationOnly();
+        return;
+      }
+      
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Locatie nodig',
+          'We hebben je locatie nodig om je training te starten.',
+          [
+            { text: 'Annuleren', style: 'cancel' },
+            { text: 'Open Instellingen', onPress: openSettings }
+          ]
+        );
+        return;
+      }
+      
+      fetchLocationOnly();
+    } catch (error) {
+      console.error('Location error:', error);
+      Alert.alert('Fout', 'Kon locatie niet ophalen. Probeer opnieuw.');
     }
   };
 

@@ -22,18 +22,37 @@ interface GymSearchProps {
   currentLng?: number | null;
 }
 
-// Popular gym chains in Netherlands for quick results
-const POPULAR_GYMS = [
-  'Basic-Fit',
-  'Fit For Free',
-  'SportCity',
-  'Anytime Fitness',
-  'TrainMore',
-  'HealthCity',
-  'David Lloyd',
-  'Virgin Active',
-  'Fitness World',
-  'Big Gym',
+// Popular gym chains in Netherlands for detection
+const GYM_CHAINS = [
+  'basic-fit', 'basicfit', 'basic fit',
+  'fit for free', 'fitforfree',
+  'sportcity', 'sport city',
+  'anytime fitness', 'anytimefitness',
+  'trainmore', 'train more',
+  'healthcity', 'health city',
+  'david lloyd',
+  'virgin active',
+  'fitness world', 'fitnessworld',
+  'big gym', 'biggym',
+  'fit20', 'fit 20',
+  'sportschool',
+  'gym',
+  'fitness',
+];
+
+// Dutch cities for detection
+const DUTCH_CITIES = [
+  'amsterdam', 'rotterdam', 'den haag', 'the hague', 's-gravenhage',
+  'utrecht', 'eindhoven', 'tilburg', 'groningen', 'almere',
+  'breda', 'nijmegen', 'enschede', 'haarlem', 'arnhem',
+  'zaanstad', 'amersfoort', 'apeldoorn', 'hoofddorp', 'maastricht',
+  'leiden', 'dordrecht', 'zoetermeer', 'zwolle', 'deventer',
+  'delft', 'alkmaar', 'heerlen', 'venlo', 'leeuwarden',
+  'hilversum', 'amstelveen', 'roosendaal', 'oss', 'schiedam',
+  'spijkenisse', 'helmond', 'vlaardingen', 'almelo', 'gouda',
+  'zaandam', 'lelystad', 'alphen', 'hoorn', 'velsen',
+  'purmerend', 'assen', 'capelle', 'nieuwegein', 'veenendaal',
+  'zeist', 'harderwijk', 'doetinchem', 'barneveld', 'hoogeveen',
 ];
 
 export function GymSearch({ value, onSelect, placeholder = "Zoek je sportschool...", currentLat, currentLng }: GymSearchProps) {
@@ -58,6 +77,13 @@ export function GymSearch({ value, onSelect, placeholder = "Zoek je sportschool.
 
   const getUserLocation = async () => {
     try {
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      
+      if (existingStatus === 'denied') {
+        setUserLocation({ lat: 52.3676, lng: 4.9041 });
+        return;
+      }
+      
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -65,73 +91,124 @@ export function GymSearch({ value, onSelect, placeholder = "Zoek je sportschool.
           lat: location.coords.latitude,
           lng: location.coords.longitude,
         });
+      } else {
+        setUserLocation({ lat: 52.3676, lng: 4.9041 });
       }
     } catch (error) {
       console.log('Could not get location:', error);
-      // Default to Amsterdam
       setUserLocation({ lat: 52.3676, lng: 4.9041 });
     }
   };
 
-  // Search gyms using Nominatim (OpenStreetMap) with Overpass API fallback
-  const searchGyms = async (searchQuery: string) => {
-    if (!searchQuery || searchQuery.length < 2) {
-      setResults([]);
-      return;
+  // Parse query to detect gym chain and city
+  const parseQuery = (searchQuery: string): { gymName: string | null; cityName: string | null } => {
+    const lowerQuery = searchQuery.toLowerCase().trim();
+    
+    // Find matching gym chain
+    let gymName: string | null = null;
+    for (const chain of GYM_CHAINS) {
+      if (lowerQuery.includes(chain)) {
+        gymName = chain;
+        break;
+      }
     }
+    
+    // Find matching city
+    let cityName: string | null = null;
+    for (const city of DUTCH_CITIES) {
+      if (lowerQuery.includes(city)) {
+        cityName = city;
+        break;
+      }
+    }
+    
+    return { gymName, cityName };
+  };
 
-    setLoading(true);
+  // Geocode a city name to coordinates
+  const geocodeCity = async (cityName: string): Promise<{ lat: number; lng: number; bbox?: number[] } | null> => {
     try {
-      const allResults: GymResult[] = [];
-      
-      // Method 1: Direct search for the gym name
-      const lat = userLocation?.lat || 52.3676;
-      const lng = userLocation?.lng || 4.9041;
-      
-      // Search using Nominatim for the specific name
-      const nominatimResponse = await fetch(
+      const response = await fetch(
         `https://nominatim.openstreetmap.org/search?` +
-        `q=${encodeURIComponent(searchQuery)}&` +
+        `q=${encodeURIComponent(cityName)}&` +
+        `format=json&` +
+        `limit=1&` +
+        `countrycodes=nl`,
+        { headers: { 'User-Agent': 'GymBuddy App/1.0' } }
+      );
+      const data = await response.json();
+      
+      if (data.length > 0) {
+        return {
+          lat: parseFloat(data[0].lat),
+          lng: parseFloat(data[0].lon),
+          bbox: data[0].boundingbox?.map(parseFloat),
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Geocode error:', error);
+      return null;
+    }
+  };
+
+  // Search gyms in area using Nominatim (more reliable than Overpass)
+  const searchGymsInArea = async (
+    centerLat: number, 
+    centerLng: number, 
+    radiusKm: number,
+    gymNameFilter?: string
+  ): Promise<GymResult[]> => {
+    try {
+      // Use Nominatim with viewbox for area search - more reliable
+      const delta = radiusKm / 111; // Rough conversion km to degrees
+      const viewbox = `${centerLng - delta},${centerLat + delta},${centerLng + delta},${centerLat - delta}`;
+      
+      // Search query - combine gym name with "fitness" or "gym"
+      const searchTerm = gymNameFilter 
+        ? `${gymNameFilter} fitness` 
+        : 'fitness gym sportschool';
+      
+      const nominatimUrl = `https://nominatim.openstreetmap.org/search?` +
+        `q=${encodeURIComponent(searchTerm)}&` +
         `format=json&` +
         `addressdetails=1&` +
-        `limit=15&` +
-        `countrycodes=nl,be,de`,
-        {
-          headers: {
-            'User-Agent': 'GymBuddy App/1.0',
-          },
-        }
-      );
-
-      const nominatimData = await nominatimResponse.json();
+        `limit=20&` +
+        `viewbox=${viewbox}&` +
+        `bounded=1&` +
+        `countrycodes=nl,be,de`;
       
-      // Filter and map Nominatim results
-      const nominatimGyms: GymResult[] = nominatimData
+      const response = await fetch(nominatimUrl, {
+        headers: { 'User-Agent': 'GymBuddy App/1.0' }
+      });
+      
+      if (!response.ok) {
+        console.log('Nominatim response not ok:', response.status);
+        return [];
+      }
+      
+      const data = await response.json();
+      
+      let gyms: GymResult[] = data
         .filter((item: any) => {
-          // Filter for fitness-related places
           const name = (item.name || item.display_name || '').toLowerCase();
-          const type = (item.type || '').toLowerCase();
-          const category = (item.class || '').toLowerCase();
-          
+          // Must be fitness related
           return name.includes('fit') || 
                  name.includes('gym') || 
                  name.includes('sport') ||
-                 name.includes('fitness') ||
-                 type.includes('sports') ||
-                 category.includes('leisure') ||
-                 category.includes('amenity');
+                 name.includes('fitness');
         })
         .map((item: any, index: number) => {
           const itemLat = parseFloat(item.lat);
           const itemLng = parseFloat(item.lon);
-          let distance: number | undefined;
           
+          let distance: number | undefined;
           if (userLocation) {
             distance = calculateDistance(userLocation.lat, userLocation.lng, itemLat, itemLng);
           }
 
           return {
-            id: item.place_id?.toString() || `nom-${index}`,
+            id: `nom-${item.place_id || index}`,
             name: item.name || item.display_name.split(',')[0],
             address: formatAddress(item.address || {}, item.display_name),
             lat: itemLat,
@@ -140,113 +217,261 @@ export function GymSearch({ value, onSelect, placeholder = "Zoek je sportschool.
           };
         });
 
-      allResults.push(...nominatimGyms);
+      // Filter by gym name if provided
+      if (gymNameFilter) {
+        const filterLower = gymNameFilter.toLowerCase().replace(/[-\s]/g, '');
+        gyms = gyms.filter(gym => {
+          const nameLower = gym.name.toLowerCase().replace(/[-\s]/g, '');
+          return nameLower.includes(filterLower) || filterLower.includes(nameLower.split(' ')[0]);
+        });
+      }
 
-      // Method 2: Use Overpass API to find nearby gyms/fitness centers
-      if (userLocation && allResults.length < 5) {
-        try {
-          const overpassQuery = `
-            [out:json][timeout:10];
-            (
-              node["leisure"="fitness_centre"](around:25000,${lat},${lng});
-              node["amenity"="gym"](around:25000,${lat},${lng});
-              way["leisure"="fitness_centre"](around:25000,${lat},${lng});
-              way["amenity"="gym"](around:25000,${lat},${lng});
-            );
-            out center;
-          `;
+      return gyms;
+    } catch (error) {
+      console.error('Area search error:', error);
+      return [];
+    }
+  };
+
+  // Fallback: Search using Overpass API (may be rate limited)
+  const searchGymsOverpass = async (
+    centerLat: number, 
+    centerLng: number, 
+    radiusKm: number,
+    gymNameFilter?: string
+  ): Promise<GymResult[]> => {
+    try {
+      const radiusMeters = Math.min(radiusKm * 1000, 15000); // Max 15km to reduce load
+      
+      const overpassQuery = `[out:json][timeout:10];
+(node["leisure"="fitness_centre"](around:${radiusMeters},${centerLat},${centerLng});
+node["amenity"="gym"](around:${radiusMeters},${centerLat},${centerLng}););
+out tags;`;
+      
+      const response = await fetch(
+        'https://overpass-api.de/api/interpreter',
+        { 
+          method: 'POST', 
+          body: `data=${encodeURIComponent(overpassQuery)}`,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        }
+      );
+      
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType?.includes('application/json')) {
+        console.log('Overpass returned non-JSON response');
+        return [];
+      }
+      
+      const data = await response.json();
+      
+      if (!data.elements) {
+        return [];
+      }
+      
+      let gyms: GymResult[] = data.elements
+        .filter((el: any) => el.tags?.name)
+        .map((el: any, index: number) => {
+          const elLat = el.lat || el.center?.lat;
+          const elLng = el.lon || el.center?.lon;
           
-          const overpassResponse = await fetch(
-            'https://overpass-api.de/api/interpreter',
-            {
-              method: 'POST',
-              body: overpassQuery,
-            }
-          );
+          let distance: number | undefined;
+          if (userLocation && elLat && elLng) {
+            distance = calculateDistance(userLocation.lat, userLocation.lng, elLat, elLng);
+          }
+
+          const addressParts = [
+            el.tags?.['addr:street'],
+            el.tags?.['addr:housenumber'],
+            el.tags?.['addr:city'],
+          ].filter(Boolean);
+
+          return {
+            id: `ovp-${el.id || index}`,
+            name: el.tags?.name || 'Onbekende gym',
+            address: addressParts.length > 0 ? addressParts.join(' ') : el.tags?.['addr:city'] || 'Adres onbekend',
+            lat: elLat,
+            lng: elLng,
+            distance,
+          };
+        })
+        .filter((gym: GymResult) => gym.lat && gym.lng);
+
+      // Filter by gym name if provided
+      if (gymNameFilter) {
+        const filterLower = gymNameFilter.toLowerCase().replace(/[-\s]/g, '');
+        gyms = gyms.filter(gym => {
+          const nameLower = gym.name.toLowerCase().replace(/[-\s]/g, '');
+          return nameLower.includes(filterLower) || filterLower.includes(nameLower.split(' ')[0]);
+        });
+      }
+
+      return gyms;
+    } catch (error) {
+      console.log('Overpass fallback error (ignoring):', error);
+      return [];
+    }
+  };
+
+  // Main search function
+  const searchGyms = async (searchQuery: string) => {
+    if (!searchQuery || searchQuery.length < 2) {
+      setResults([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { gymName, cityName } = parseQuery(searchQuery);
+      let allResults: GymResult[] = [];
+      const lat = userLocation?.lat || 52.3676;
+      const lng = userLocation?.lng || 4.9041;
+
+      // Case 1: Gym chain + City (e.g., "Basic-Fit Rotterdam")
+      if (gymName && cityName) {
+        console.log(`Searching for ${gymName} in ${cityName}`);
+        
+        // Direct Nominatim search for gym chain in city
+        const searchTerm = `${gymName} ${cityName}`;
+        const nominatimResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(searchTerm)}&` +
+          `format=json&` +
+          `addressdetails=1&` +
+          `limit=20&` +
+          `countrycodes=nl,be,de`,
+          { headers: { 'User-Agent': 'GymBuddy App/1.0' } }
+        );
+
+        if (nominatimResponse.ok) {
+          const nominatimData = await nominatimResponse.json();
+          const gyms = nominatimData
+            .filter((item: any) => item.name)
+            .map((item: any, index: number) => ({
+              id: item.place_id?.toString() || `nom-${index}`,
+              name: item.name || item.display_name.split(',')[0],
+              address: formatAddress(item.address || {}, item.display_name),
+              lat: parseFloat(item.lat),
+              lng: parseFloat(item.lon),
+              distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, parseFloat(item.lat), parseFloat(item.lon)) : undefined,
+            }));
+          allResults.push(...gyms);
+        }
+
+        // If not enough results, try area search
+        if (allResults.length < 3) {
+          const cityCoords = await geocodeCity(cityName);
+          if (cityCoords) {
+            const areaResults = await searchGymsInArea(cityCoords.lat, cityCoords.lng, 20, gymName);
+            allResults.push(...areaResults);
+          }
+        }
+
+        // Try Overpass as last resort
+        if (allResults.length < 3) {
+          const cityCoords = await geocodeCity(cityName);
+          if (cityCoords) {
+            const overpassResults = await searchGymsOverpass(cityCoords.lat, cityCoords.lng, 15, gymName);
+            allResults.push(...overpassResults);
+          }
+        }
+      }
+      
+      // Case 2: Only city name (e.g., "Rotterdam") - show all gyms in that city
+      else if (cityName && !gymName) {
+        console.log(`Searching all gyms in ${cityName}`);
+        
+        const cityCoords = await geocodeCity(cityName);
+        if (cityCoords) {
+          allResults = await searchGymsInArea(cityCoords.lat, cityCoords.lng, 15);
           
-          const overpassData = await overpassResponse.json();
+          // Add Overpass results if needed
+          if (allResults.length < 5) {
+            const overpassResults = await searchGymsOverpass(cityCoords.lat, cityCoords.lng, 10);
+            allResults.push(...overpassResults);
+          }
+        }
+      }
+      
+      // Case 3: Only gym chain or general search - search near user
+      else {
+        // Search Nominatim for gyms with the query
+        const nominatimResponse = await fetch(
+          `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(searchQuery + ' fitness')}&` +
+          `format=json&` +
+          `addressdetails=1&` +
+          `limit=15&` +
+          `countrycodes=nl,be,de`,
+          { headers: { 'User-Agent': 'GymBuddy App/1.0' } }
+        );
+
+        if (nominatimResponse.ok) {
+          const nominatimData = await nominatimResponse.json();
           
-          const overpassGyms: GymResult[] = (overpassData.elements || [])
-            .filter((el: any) => {
-              const name = (el.tags?.name || '').toLowerCase();
-              return name.includes(searchQuery.toLowerCase());
+          const nominatimGyms: GymResult[] = nominatimData
+            .filter((item: any) => {
+              const name = (item.name || item.display_name || '').toLowerCase();
+              return name.includes('fit') || 
+                     name.includes('gym') || 
+                     name.includes('sport') ||
+                     name.includes('fitness');
             })
-            .map((el: any, index: number) => {
-              const elLat = el.lat || el.center?.lat;
-              const elLng = el.lon || el.center?.lon;
-              let distance: number | undefined;
-              
-              if (userLocation && elLat && elLng) {
-                distance = calculateDistance(userLocation.lat, userLocation.lng, elLat, elLng);
-              }
+            .map((item: any, index: number) => ({
+              id: item.place_id?.toString() || `nom-${index}`,
+              name: item.name || item.display_name.split(',')[0],
+              address: formatAddress(item.address || {}, item.display_name),
+              lat: parseFloat(item.lat),
+              lng: parseFloat(item.lon),
+              distance: userLocation ? calculateDistance(userLocation.lat, userLocation.lng, parseFloat(item.lat), parseFloat(item.lon)) : undefined,
+            }));
 
-              return {
-                id: `ovp-${el.id || index}`,
-                name: el.tags?.name || 'Onbekende gym',
-                address: [el.tags?.['addr:street'], el.tags?.['addr:housenumber'], el.tags?.['addr:city']].filter(Boolean).join(' ') || 'Adres onbekend',
-                lat: elLat,
-                lng: elLng,
-                distance,
-              };
-            })
-            .filter((gym: GymResult) => gym.lat && gym.lng);
+          allResults.push(...nominatimGyms);
+        }
 
-          allResults.push(...overpassGyms);
-        } catch (overpassError) {
-          console.log('Overpass API error:', overpassError);
+        // Also search nearby with Overpass if few results
+        if (allResults.length < 5) {
+          const overpassResults = await searchGymsOverpass(lat, lng, 15, gymName || undefined);
+          allResults.push(...overpassResults);
         }
       }
 
-      // Remove duplicates by name
+      // Remove duplicates by name + location
       const uniqueResults = allResults.filter((gym, index, self) =>
-        index === self.findIndex((g) => g.name.toLowerCase() === gym.name.toLowerCase())
+        index === self.findIndex((g) => 
+          g.name.toLowerCase() === gym.name.toLowerCase() &&
+          Math.abs(g.lat - gym.lat) < 0.002
+        )
       );
 
-      // Sort by distance
+      // Sort by distance from user
       if (userLocation) {
         uniqueResults.sort((a, b) => (a.distance || 999) - (b.distance || 999));
       }
 
-      // If we have API results, use them
       if (uniqueResults.length > 0) {
-        setResults(uniqueResults.slice(0, 10));
+        setResults(uniqueResults.slice(0, 15));
       } else {
-        // Fallback: show matching popular gyms with option to add location manually
-        const popularMatches = POPULAR_GYMS
-          .filter(gym => gym.toLowerCase().includes(searchQuery.toLowerCase()))
-          .map((gym, index) => ({
-            id: `popular-${index}`,
-            name: gym,
-            address: `Gebruik huidige locatie (${lat.toFixed(2)}, ${lng.toFixed(2)})`,
-            lat: lat,
-            lng: lng,
-            distance: 0,
-          }));
-
-        if (popularMatches.length > 0) {
-          setResults(popularMatches);
-        } else {
-          // Allow custom gym name
-          setResults([{
-            id: 'custom-0',
-            name: searchQuery,
-            address: `Nieuwe sportschool toevoegen`,
-            lat: lat,
-            lng: lng,
-            distance: 0,
-          }]);
-        }
+        // Fallback: allow custom gym name
+        setResults([{
+          id: 'custom-0',
+          name: searchQuery,
+          address: `Sportschool toevoegen`,
+          lat: lat,
+          lng: lng,
+          distance: 0,
+        }]);
       }
     } catch (error) {
       console.error('Gym search error:', error);
-      // Fallback to custom entry
       const lat = userLocation?.lat || 52.3676;
       const lng = userLocation?.lng || 4.9041;
       
       setResults([{
         id: 'custom-0',
         name: searchQuery,
-        address: `Sportschool toevoegen op huidige locatie`,
+        address: `Sportschool toevoegen`,
         lat: lat,
         lng: lng,
         distance: 0,
@@ -258,7 +483,7 @@ export function GymSearch({ value, onSelect, placeholder = "Zoek je sportschool.
 
   // Debounced search
   const debouncedSearch = useCallback(
-    debounce((q: string) => searchGyms(q), 500),
+    debounce((q: string) => searchGyms(q), 600),
     [userLocation]
   );
 
@@ -298,6 +523,16 @@ export function GymSearch({ value, onSelect, placeholder = "Zoek je sportschool.
           activeUnderlineColor={theme.colors.primary}
         />
       </View>
+
+      {/* Search hint */}
+      {showResults && query.length >= 1 && query.length < 3 && (
+        <View style={[styles.hintContainer, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}>
+          <MaterialCommunityIcons name="lightbulb-outline" size={18} color="#FFB800" />
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8, flex: 1 }}>
+            💡 Tip: Typ "Basic-Fit Rotterdam" om alle Basic-Fit locaties in Rotterdam te zien
+          </Text>
+        </View>
+      )}
 
       {showResults && results.length > 0 && (
         <View style={[styles.resultsContainer, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}>
@@ -356,8 +591,8 @@ export function GymSearch({ value, onSelect, placeholder = "Zoek je sportschool.
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
             Geen resultaten gevonden
           </Text>
-          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            Typ de naam van je sportschool
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+            Probeer "gym naam + stad"{'\n'}bijv. "Basic-Fit Amsterdam"
           </Text>
         </View>
       )}
@@ -367,7 +602,7 @@ export function GymSearch({ value, onSelect, placeholder = "Zoek je sportschool.
 
 // Helper functions
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
@@ -392,7 +627,6 @@ function formatAddress(address: any, displayName: string): string {
       return parts.join(' ');
     }
   }
-  // Fallback to display name parts
   const parts = displayName.split(',').slice(1, 3).map(s => s.trim());
   return parts.join(', ') || displayName;
 }
@@ -414,6 +648,13 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: 'transparent',
   },
+  hintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 12,
+  },
   resultsContainer: {
     position: 'absolute',
     top: '100%',
@@ -426,11 +667,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
-    maxHeight: 300,
+    maxHeight: 350,
     overflow: 'hidden',
   },
   resultsList: {
-    maxHeight: 300,
+    maxHeight: 350,
   },
   resultItem: {
     flexDirection: 'row',

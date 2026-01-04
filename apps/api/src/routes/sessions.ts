@@ -105,6 +105,8 @@ router.get('/nearby', authMiddleware, async (req: AuthRequest, res: Response) =>
 
     let sessions = await prisma.session.findMany({
       where: {
+        // Exclude user's own sessions - they appear in "Mijn sessies"
+        ownerId: { not: req.user!.id },
         startTime: {
           gte: timeFrom,
           lte: timeTo
@@ -113,7 +115,11 @@ router.get('/nearby', authMiddleware, async (req: AuthRequest, res: Response) =>
         ...(workoutType && { workoutType })
       },
       include: {
-        owner: true
+        owner: true,
+        // Include join requests from the current user to show status
+        joinRequests: {
+          where: { requesterId: req.user!.id }
+        }
       },
       orderBy: { startTime: 'asc' }
     });
@@ -127,25 +133,36 @@ router.get('/nearby', authMiddleware, async (req: AuthRequest, res: Response) =>
       .filter(session => session.distance <= radiusKm)
       .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
-    const sessionData = sessionsWithDistance.map(session => ({
-      id: session.id,
-      ownerId: session.ownerId,
-      owner: toUserProfile(session.owner, currentUser!),
-      title: session.title,
-      workoutType: session.workoutType,
-      intensity: session.intensity,
-      gymName: session.gymName,
-      gymAddress: session.gymAddress,
-      lat: session.lat,
-      lng: session.lng,
-      startTime: session.startTime.toISOString(),
-      durationMinutes: session.durationMinutes,
-      slots: session.slots,
-      slotsAvailable: session.slotsAvailable,
-      notes: session.notes,
-      distance: Math.round(session.distance * 10) / 10,
-      createdAt: session.createdAt.toISOString()
-    }));
+    const sessionData = sessionsWithDistance.map(session => {
+      // Determine user's join status for this session
+      const myJoinRequest = session.joinRequests?.[0];
+      let myJoinStatus: 'none' | 'pending' | 'accepted' | 'declined' = 'none';
+      if (myJoinRequest) {
+        myJoinStatus = myJoinRequest.status as 'pending' | 'accepted' | 'declined';
+      }
+
+      return {
+        id: session.id,
+        ownerId: session.ownerId,
+        owner: toUserProfile(session.owner, currentUser!),
+        title: session.title,
+        workoutType: session.workoutType,
+        intensity: session.intensity,
+        gymName: session.gymName,
+        gymAddress: session.gymAddress,
+        lat: session.lat,
+        lng: session.lng,
+        startTime: session.startTime.toISOString(),
+        durationMinutes: session.durationMinutes,
+        slots: session.slots,
+        slotsAvailable: session.slotsAvailable,
+        notes: session.notes,
+        distance: Math.round(session.distance * 10) / 10,
+        createdAt: session.createdAt.toISOString(),
+        // New field: user's join status
+        myJoinStatus
+      };
+    });
 
     res.json({
       success: true,

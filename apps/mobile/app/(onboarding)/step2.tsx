@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert, useColorScheme } from 'react-native';
-import { Text, TextInput, Button, useTheme, ProgressBar, SegmentedButtons, IconButton } from 'react-native-paper';
+import { Text, TextInput, Button, useTheme, ProgressBar, IconButton } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
 import { useAuth } from '@/lib/auth';
 import { GymSearch, GymResult } from '@/components/gym-search';
 
@@ -22,44 +21,6 @@ export default function OnboardingStep2() {
   const [lng, setLng] = useState<number | null>(user?.lng || null);
   const [radius, setRadius] = useState(user?.preferredRadius || 10);
   const [loading, setLoading] = useState(false);
-  const [locationLoading, setLocationLoading] = useState(false);
-  const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-
-  const getCurrentLocation = async () => {
-    setLocationLoading(true);
-    setLocationStatus('loading');
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Locatie toegang', 'We hebben locatie toegang nodig om gyms in de buurt te vinden.');
-        setLocationStatus('error');
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      setLat(location.coords.latitude);
-      setLng(location.coords.longitude);
-
-      // Try to get address
-      const [address] = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-
-      if (address && !gymAddress) {
-        const addressStr = [address.street, address.city].filter(Boolean).join(', ');
-        setGymAddress(addressStr);
-      }
-      
-      setLocationStatus('success');
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Fout', 'Kon locatie niet ophalen');
-      setLocationStatus('error');
-    } finally {
-      setLocationLoading(false);
-    }
-  };
 
   const handleGymSelect = (gym: GymResult) => {
     setGymName(gym.name);
@@ -67,13 +28,17 @@ export default function OnboardingStep2() {
     if (gym.lat && gym.lng) {
       setLat(gym.lat);
       setLng(gym.lng);
-      setLocationStatus('success');
     }
   };
 
   const handleNext = async () => {
     if (!gymName) {
-      Alert.alert('Verplicht', 'Vul je gym naam in');
+      Alert.alert('Verplicht', 'Zoek en selecteer je sportschool');
+      return;
+    }
+
+    if (!lat || !lng) {
+      Alert.alert('Locatie nodig', 'Selecteer een sportschool uit de zoekresultaten zodat we de locatie kunnen bepalen.');
       return;
     }
 
@@ -89,6 +54,7 @@ export default function OnboardingStep2() {
       router.push('/(onboarding)/step3');
     } catch (error) {
       console.error(error);
+      Alert.alert('Fout', 'Kon gegevens niet opslaan');
     } finally {
       setLoading(false);
     }
@@ -127,7 +93,7 @@ export default function OnboardingStep2() {
               Waar train je? 🏋️
             </Text>
             <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
-              Zoek je sportschool zodat we mensen in de buurt kunnen vinden
+              Zoek je sportschool zodat we gym buddies in de buurt kunnen vinden
             </Text>
           </View>
 
@@ -136,7 +102,7 @@ export default function OnboardingStep2() {
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="dumbbell" size={18} color={theme.colors.primary} />
               <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-                Sportschool
+                Jouw Sportschool
               </Text>
             </View>
             <GymSearch
@@ -148,84 +114,36 @@ export default function OnboardingStep2() {
             />
           </View>
 
-          {/* Address (shown after selection) */}
-          {gymName && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="map-marker-outline" size={18} color="#00B0FF" />
-                <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-                  Adres
+          {/* Selected Gym Info (shown after selection) */}
+          {gymName && lat && lng && (
+            <View style={[styles.selectedGymCard, { backgroundColor: isDark ? '#1A2E1A' : '#E8F5E9' }]}>
+              <View style={styles.selectedGymIcon}>
+                <MaterialCommunityIcons name="check-circle" size={24} color="#00C853" />
+              </View>
+              <View style={styles.selectedGymInfo}>
+                <Text variant="titleSmall" style={{ color: theme.colors.onBackground, fontWeight: '600' }}>
+                  {gymName}
                 </Text>
-              </View>
-              <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}>
-                <TextInput
-                  value={gymAddress}
-                  onChangeText={setGymAddress}
-                  placeholder="Straat, Stad"
-                  mode="flat"
-                  left={<TextInput.Icon icon="map-marker" color="#00B0FF" />}
-                  style={styles.input}
-                  underlineColor="transparent"
-                />
-              </View>
-            </View>
-          )}
-
-          {/* Location Button */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="crosshairs-gps" size={18} color="#7C4DFF" />
-              <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-                Locatie
-              </Text>
-            </View>
-            
-            <View 
-              style={[
-                styles.locationButton, 
-                { 
-                  backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF',
-                  borderColor: locationStatus === 'success' ? '#00C853' : 'transparent',
-                  borderWidth: locationStatus === 'success' ? 2 : 0,
-                }
-              ]}
-              onTouchEnd={getCurrentLocation}
-            >
-              <View style={[styles.locationIcon, { backgroundColor: locationStatus === 'success' ? 'rgba(0,200,83,0.1)' : 'rgba(124,77,255,0.1)' }]}>
-                <MaterialCommunityIcons 
-                  name={locationStatus === 'success' ? "check" : "crosshairs-gps"} 
-                  size={24} 
-                  color={locationStatus === 'success' ? "#00C853" : "#7C4DFF"} 
-                />
-              </View>
-              <View style={styles.locationText}>
-                <Text variant="bodyLarge" style={{ color: theme.colors.onBackground, fontWeight: '600' }}>
-                  {locationStatus === 'success' ? 'Locatie opgehaald ✓' : 'Gebruik huidige locatie'}
-                </Text>
-                {lat && lng ? (
+                {gymAddress && (
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {lat.toFixed(4)}, {lng.toFixed(4)}
-                  </Text>
-                ) : (
-                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    Tik om je locatie te gebruiken
+                    📍 {gymAddress}
                   </Text>
                 )}
               </View>
-              {locationLoading && (
-                <MaterialCommunityIcons name="loading" size={20} color={theme.colors.primary} />
-              )}
             </View>
-          </View>
+          )}
 
           {/* Search Radius */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <MaterialCommunityIcons name="radar" size={18} color="#FFB800" />
               <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-                Zoekradius
+                Zoekradius voor buddies
               </Text>
             </View>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12, marginTop: -4 }}>
+              Hoe ver mag een gym buddy bij jouw gym vandaan trainen?
+            </Text>
             <View style={styles.radiusOptions}>
               {[5, 10, 15, 25].map((r) => (
                 <View 
@@ -251,10 +169,10 @@ export default function OnboardingStep2() {
           </View>
 
           {/* Info Card */}
-          <View style={[styles.infoCard, { backgroundColor: isDark ? 'rgba(255,107,53,0.1)' : 'rgba(255,107,53,0.05)' }]}>
-            <MaterialCommunityIcons name="information" size={20} color={theme.colors.primary} />
+          <View style={[styles.infoCard, { backgroundColor: isDark ? 'rgba(0,200,83,0.1)' : 'rgba(0,200,83,0.05)' }]}>
+            <MaterialCommunityIcons name="information" size={20} color="#00C853" />
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1, marginLeft: 12 }}>
-              Je locatie wordt alleen gebruikt om gym buddies in de buurt te vinden. Je exacte locatie wordt nooit gedeeld.
+              We gebruiken de locatie van je sportschool om gym buddies in de buurt te vinden. Je kunt per sessie ook een andere gym kiezen.
             </Text>
           </View>
         </ScrollView>
@@ -279,7 +197,7 @@ export default function OnboardingStep2() {
               mode="text"
               onPress={handleNext}
               loading={loading}
-              disabled={loading || !gymName}
+              disabled={loading || !gymName || !lat}
               textColor="white"
               contentStyle={styles.buttonContent}
               labelStyle={{ fontWeight: 'bold' }}
@@ -355,38 +273,17 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontWeight: '600',
   },
-  inputContainer: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  input: {
-    backgroundColor: 'transparent',
-  },
-  locationButton: {
+  selectedGymCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    marginBottom: 24,
   },
-  locationIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
+  selectedGymIcon: {
+    marginRight: 12,
   },
-  locationText: {
+  selectedGymInfo: {
     flex: 1,
   },
   radiusOptions: {

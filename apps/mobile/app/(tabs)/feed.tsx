@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, Dimensions, Animated, PanResponder, Image, useColorScheme } from 'react-native';
+import { View, StyleSheet, Dimensions, Animated, PanResponder, Image, useColorScheme, Alert, Linking, Platform } from 'react-native';
 import { Text, Button, useTheme, IconButton, Chip, Portal, Modal, ActivityIndicator } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -59,11 +59,16 @@ export default function FeedScreen() {
       let lng = user?.lng;
 
       if (!lat || !lng) {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const location = await Location.getCurrentPositionAsync({});
-          lat = location.coords.latitude;
-          lng = location.coords.longitude;
+        // Check existing permission status first
+        const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+        
+        if (existingStatus !== 'denied') {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const location = await Location.getCurrentPositionAsync({});
+            lat = location.coords.latitude;
+            lng = location.coords.longitude;
+          }
         }
       }
 
@@ -116,13 +121,14 @@ export default function FeedScreen() {
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onPanResponderGrant: () => {
-      Animated.spring(cardScale, { toValue: 0.98, useNativeDriver: true }).start();
+      // Must use useNativeDriver: false because position uses false (can't mix)
+      Animated.spring(cardScale, { toValue: 0.98, useNativeDriver: false }).start();
     },
     onPanResponderMove: (_, gesture) => {
       position.setValue({ x: gesture.dx, y: gesture.dy * 0.3 });
     },
     onPanResponderRelease: (_, gesture) => {
-      Animated.spring(cardScale, { toValue: 1, useNativeDriver: true }).start();
+      Animated.spring(cardScale, { toValue: 1, useNativeDriver: false }).start();
       
       if (gesture.dx > SWIPE_THRESHOLD) {
         Animated.timing(position, {

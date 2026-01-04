@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Platform, useColorScheme, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Platform, useColorScheme, Dimensions, TouchableOpacity } from 'react-native';
 import { Text, TextInput, Button, useTheme, Chip, SegmentedButtons } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -165,6 +165,40 @@ export default function CreateSessionScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity 
+            style={[styles.quickActionCard, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}
+            onPress={() => router.push('/roulette')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={['#9C27B0', '#7B1FA2']}
+              style={styles.quickActionIcon}
+            >
+              <MaterialCommunityIcons name="dice-multiple" size={24} color="white" />
+            </LinearGradient>
+            <Text variant="labelMedium" style={{ color: isDark ? '#fff' : '#000', fontWeight: '600' }}>
+              Workout{'\n'}Roulette 🎰
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.quickActionCard, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}
+            onPress={() => router.push('/start-training')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient 
+              colors={['#4CAF50', '#2E7D32']}
+              style={styles.quickActionIcon}
+            >
+              <MaterialCommunityIcons name="broadcast" size={24} color="white" />
+            </LinearGradient>
+            <Text variant="labelMedium" style={{ color: isDark ? '#fff' : '#000', fontWeight: '600' }}>
+              Training{'\n'}Starten 📍
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Title Input */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -621,5 +655,30 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(0,200,83,0.3)',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  quickActionCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

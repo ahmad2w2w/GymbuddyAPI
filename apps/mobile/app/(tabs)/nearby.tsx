@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, Dimensions, Alert, ScrollView, TouchableOpacity, useColorScheme, RefreshControl } from 'react-native';
+import { View, StyleSheet, FlatList, Dimensions, Alert, ScrollView, TouchableOpacity, useColorScheme, RefreshControl, Linking, Platform } from 'react-native';
 import { Text, Button, useTheme, Card, Chip, IconButton, SegmentedButtons, ActivityIndicator, Portal, Modal, Badge, Avatar, Divider, TextInput, Menu } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -77,6 +77,11 @@ export default function NearbyScreen() {
   const [mapPreviewSession, setMapPreviewSession] = useState<Session | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [requestingJoin, setRequestingJoin] = useState(false);
+  
+  // Location mode: search around gym or current GPS location
+  const [locationMode, setLocationMode] = useState<'gym' | 'current'>('gym');
+  const [currentGpsLocation, setCurrentGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   // My sessions state
   const [mySessions, setMySessions] = useState<Session[]>([]);
@@ -91,32 +96,59 @@ export default function NearbyScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
 
-  const loadSessions = useCallback(async () => {
+  const openSettings = useCallback(() => {
+    if (Platform.OS === 'ios') {
+      Linking.openURL('app-settings:');
+    } else {
+      Linking.openSettings();
+    }
+  }, []);
+
+  // Get current GPS location
+  const getCurrentGpsLocation = useCallback(async (): Promise<{ lat: number; lng: number } | null> => {
+    try {
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      
+      if (existingStatus === 'denied') {
+        Alert.alert(
+          'Locatie nodig',
+          'Zet locatie aan in Instellingen om je huidige positie te gebruiken.',
+          [
+            { text: 'Annuleren', style: 'cancel' },
+            { text: 'Open Instellingen', onPress: openSettings }
+          ]
+        );
+        return null;
+      }
+      
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({});
+        return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+      }
+      return null;
+    } catch (error) {
+      console.error('GPS error:', error);
+      return null;
+    }
+  }, [openSettings]);
+
+  // Search sessions at specific coordinates
+  const searchSessionsAt = useCallback(async (searchLat: number, searchLng: number) => {
     try {
       setLoading(true);
-      let lat = user?.lat;
-      let lng = user?.lng;
+      setLocation({ lat: searchLat, lng: searchLng });
 
-      if (!lat || !lng) {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({});
-          lat = loc.coords.latitude;
-          lng = loc.coords.longitude;
-        }
-      }
-
-      if (lat && lng) {
-        setLocation({ lat, lng });
-      }
+      console.log(`🔍 Searching sessions at: ${searchLat}, ${searchLng} (radius: ${user?.preferredRadius || 15}km)`);
 
       const response = await api.getNearbySessions({
-        lat: lat || 52.3676,
-        lng: lng || 4.9041,
+        lat: searchLat,
+        lng: searchLng,
         radiusKm: user?.preferredRadius || 15,
       });
 
       if (response.success) {
+        console.log(`📍 Found ${response.data.length} sessions`);
         setSessions(response.data);
       }
     } catch (error) {
@@ -124,7 +156,55 @@ export default function NearbyScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user?.preferredRadius]);
+
+  // Toggle location mode (used by the map button)
+  const toggleLocationMode = useCallback(async (): Promise<{ lat: number; lng: number } | null> => {
+    if (locationMode === 'gym') {
+      // Switch to current GPS location
+      setGpsLoading(true);
+      const gps = await getCurrentGpsLocation();
+      setGpsLoading(false);
+      
+      if (gps) {
+        console.log(`📍 GPS location: ${gps.lat}, ${gps.lng}`);
+        setCurrentGpsLocation(gps);
+        setLocationMode('current');
+        setLocation(gps);
+        // Directly search at the new location
+        await searchSessionsAt(gps.lat, gps.lng);
+        return gps;
+      }
+      return null;
+    } else {
+      // Switch back to gym location
+      setLocationMode('gym');
+      if (user?.lat && user?.lng) {
+        setLocation({ lat: user.lat, lng: user.lng });
+        // Directly search at gym location
+        await searchSessionsAt(user.lat, user.lng);
+        return { lat: user.lat, lng: user.lng };
+      }
+      return null;
+    }
+  }, [getCurrentGpsLocation, user, locationMode, searchSessionsAt]);
+
+  const loadSessions = useCallback(async () => {
+    let searchLat: number;
+    let searchLng: number;
+
+    if (locationMode === 'current' && currentGpsLocation) {
+      // Use current GPS location
+      searchLat = currentGpsLocation.lat;
+      searchLng = currentGpsLocation.lng;
+    } else {
+      // Use gym location (default)
+      searchLat = user?.lat || 52.3676;
+      searchLng = user?.lng || 4.9041;
+    }
+
+    await searchSessionsAt(searchLat, searchLng);
+  }, [user, locationMode, currentGpsLocation, searchSessionsAt]);
 
   useEffect(() => {
     if (mainTab === 'nearby') {
@@ -344,6 +424,27 @@ export default function NearbyScreen() {
     const status = getSessionStatus(item);
     const timeUntil = getTimeUntil(item.startTime);
     
+    // Determine join status badge
+    const getJoinStatusBadge = () => {
+      if (!item.myJoinStatus || item.myJoinStatus === 'none') return null;
+      
+      const statusConfig = {
+        pending: { color: '#FFA000', icon: 'clock-outline' as const, text: 'Aangevraagd' },
+        accepted: { color: '#00C853', icon: 'check-circle' as const, text: 'Geaccepteerd' },
+        declined: { color: '#FF1744', icon: 'close-circle' as const, text: 'Afgewezen' },
+      };
+      
+      const config = statusConfig[item.myJoinStatus];
+      if (!config) return null;
+      
+      return (
+        <View style={[styles.joinStatusBadge, { backgroundColor: config.color }]}>
+          <MaterialCommunityIcons name={config.icon} size={12} color="white" />
+          <Text style={styles.joinStatusText}>{config.text}</Text>
+        </View>
+      );
+    };
+    
     return (
       <TouchableOpacity
         style={[styles.sessionCard, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}
@@ -357,6 +458,9 @@ export default function NearbyScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         />
+        
+        {/* Join status badge at top */}
+        {getJoinStatusBadge()}
         
         <View style={styles.cardContent}>
           {/* Header row */}
@@ -921,22 +1025,53 @@ export default function NearbyScreen() {
             })}
           </MapView>
 
-          {/* My location button */}
-          {location && (
-            <TouchableOpacity 
-              style={[styles.myLocationButton, { backgroundColor: isDark ? '#1A1A2E' : 'white' }]}
-              onPress={() => {
+          {/* Location toggle button - switches between gym and current GPS */}
+          <TouchableOpacity 
+            style={[
+              styles.myLocationButton, 
+              { 
+                backgroundColor: isDark ? '#1A1A2E' : 'white',
+                borderWidth: locationMode === 'current' ? 2 : 0,
+                borderColor: '#FF6B35',
+              }
+            ]}
+            onPress={async () => {
+              const newLocation = await toggleLocationMode();
+              
+              // Animate map to new location
+              if (newLocation) {
                 mapRef.current?.animateToRegion({
-                  latitude: location.lat,
-                  longitude: location.lng,
+                  latitude: newLocation.lat,
+                  longitude: newLocation.lng,
                   latitudeDelta: 0.05,
                   longitudeDelta: 0.05,
                 }, 500);
-              }}
-            >
-              <MaterialCommunityIcons name="crosshairs-gps" size={22} color="#FF6B35" />
-            </TouchableOpacity>
-          )}
+              }
+            }}
+            disabled={gpsLoading}
+          >
+            {gpsLoading ? (
+              <ActivityIndicator size={22} color="#FF6B35" />
+            ) : (
+              <MaterialCommunityIcons 
+                name={locationMode === 'current' ? 'crosshairs-gps' : 'dumbbell'} 
+                size={22} 
+                color="#FF6B35" 
+              />
+            )}
+          </TouchableOpacity>
+          
+          {/* Location mode indicator */}
+          <View style={[styles.locationIndicator, { backgroundColor: isDark ? '#1A1A2E' : 'white' }]}>
+            <MaterialCommunityIcons 
+              name={locationMode === 'current' ? 'crosshairs-gps' : 'dumbbell'} 
+              size={12} 
+              color={theme.colors.onSurfaceVariant} 
+            />
+            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 4 }}>
+              {locationMode === 'current' ? 'Hier' : 'Mijn gym'}
+            </Text>
+          </View>
 
           {/* Session count badge */}
           <View style={[styles.mapSessionCount, { backgroundColor: isDark ? '#1A1A2E' : 'white' }]}>
@@ -1839,6 +1974,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  joinStatusBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 4,
+    zIndex: 10,
+  },
+  joinStatusText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   cardInfoSection: {
     gap: 8,
     marginBottom: 12,
@@ -2399,6 +2551,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 4,
+  },
+  locationIndicator: {
+    position: 'absolute',
+    top: 68,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   mapSessionCount: {
     position: 'absolute',
