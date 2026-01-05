@@ -266,3 +266,4 @@ export function getStreakFlames(streak: number): number {
   if (streak >= 1) return 1;
   return 0;
 }
+

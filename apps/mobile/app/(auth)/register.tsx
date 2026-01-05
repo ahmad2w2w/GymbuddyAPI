@@ -43,7 +43,11 @@ export default function RegisterScreen() {
 
     try {
       await register(email, password, name);
-      router.replace('/(onboarding)/step1');
+      // Navigate to email verification screen
+      router.replace({
+        pathname: '/(auth)/verify-email',
+        params: { email: email.toLowerCase() }
+      });
     } catch (err: any) {
       setError(err.message || 'Registratie mislukt');
     } finally {

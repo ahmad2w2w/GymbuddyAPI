@@ -214,6 +214,39 @@ export default function FeedScreen() {
             </Button>
           </View>
         </SafeAreaView>
+        
+        {/* Match Modal - also available when no more profiles */}
+        <Portal>
+          <Modal
+            visible={!!matchModal}
+            onDismiss={() => setMatchModal(null)}
+            contentContainerStyle={[styles.matchModal, { backgroundColor: isDark ? '#1A1A2E' : '#FFFFFF' }]}
+          >
+            <LinearGradient
+              colors={['#FF6B35', '#FF3D00']}
+              style={styles.matchModalIcon}
+            >
+              <MaterialCommunityIcons name="heart-multiple" size={40} color="white" />
+            </LinearGradient>
+            <Text variant="displaySmall" style={{ marginTop: 20, fontWeight: 'bold', color: theme.colors.onBackground }}>
+              It's a Match! 🎉
+            </Text>
+            <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginTop: 8 }}>
+              Jij en {matchModal?.name} willen samen trainen!
+            </Text>
+            <LinearGradient
+              colors={['#FF6B35', '#FF3D00']}
+              style={styles.matchModalButton}
+            >
+              <Button mode="text" onPress={() => setMatchModal(null)} textColor="white" labelStyle={{ fontWeight: '700' }}>
+                Stuur een bericht 💬
+              </Button>
+            </LinearGradient>
+            <Button mode="text" onPress={() => setMatchModal(null)} style={{ marginTop: 8 }} textColor={theme.colors.onSurfaceVariant}>
+              Later
+            </Button>
+          </Modal>
+        </Portal>
       </View>
     );
   }

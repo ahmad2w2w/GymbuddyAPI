@@ -14,3 +14,4 @@ export default function debounce<T extends (...args: any[]) => any>(
     }, wait);
   };
 }
+

@@ -84,6 +84,11 @@ model User {
   resetToken      String?
   resetTokenExp   DateTime?
   
+  // Email verification
+  emailVerified         Boolean   @default(false)
+  verificationToken     String?
+  verificationTokenExp  DateTime?
+  
   // Check-ins for streaks
   checkIns        CheckIn[]
   

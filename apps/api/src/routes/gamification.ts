@@ -389,3 +389,4 @@ router.get('/leaderboard', authMiddleware, async (req: AuthRequest, res: Respons
 });
 
 export default router;
+

@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { generateToken, hashPassword, comparePassword, authMiddleware, AuthRequest } from '../lib/auth.js';
 import { calculateVerificationScore } from '../lib/utils.js';
+import { sendVerificationEmail, sendPasswordResetEmail, generateVerificationCode } from '../lib/email.js';
 import { z } from 'zod';
 
 // Inline validators (instead of shared package)
@@ -45,15 +46,28 @@ router.post('/register', async (req, res) => {
     }
 
     const passwordHash = await hashPassword(password);
+    
+    // Generate verification code
+    const verificationToken = generateVerificationCode();
+    const verificationTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase(),
         passwordHash,
         name,
-        verificationScore: 10 // Just name gives 10 points
+        verificationScore: 10, // Just name gives 10 points
+        emailVerified: false,
+        verificationToken,
+        verificationTokenExp
       }
     });
+
+    // Send verification email
+    const emailSent = await sendVerificationEmail(email.toLowerCase(), name, verificationToken);
+    if (!emailSent) {
+      console.warn('[AUTH] Failed to send verification email to:', email);
+    }
 
     const token = generateToken({ userId: user.id, email: user.email });
 
@@ -80,12 +94,14 @@ router.post('/register', async (req, res) => {
           verificationScore: user.verificationScore,
           isPremium: user.isPremium,
           likesRemaining: user.likesRemaining,
+          emailVerified: user.emailVerified,
           createdAt: user.createdAt.toISOString(),
           updatedAt: user.updatedAt.toISOString()
         },
         tokens: {
           accessToken: token
-        }
+        },
+        message: 'Verificatie email verzonden naar ' + email
       }
     });
   } catch (error) {
@@ -167,6 +183,7 @@ router.post('/login', async (req, res) => {
           verificationScore: user.verificationScore,
           isPremium: user.isPremium,
           likesRemaining: user.likesRemaining,
+          emailVerified: user.emailVerified,
           createdAt: user.createdAt.toISOString(),
           updatedAt: user.updatedAt.toISOString()
         },
@@ -178,6 +195,138 @@ router.post('/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ success: false, error: 'Er ging iets mis bij inloggen' });
+  }
+});
+
+// POST /auth/verify-email - Verify email with code
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'E-mail en verificatie code vereist' 
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Gebruiker niet gevonden' 
+      });
+    }
+
+    if (user.emailVerified) {
+      return res.json({ 
+        success: true, 
+        data: { message: 'E-mail is al geverifieerd' } 
+      });
+    }
+
+    if (!user.verificationToken || !user.verificationTokenExp) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Geen verificatie code aanwezig. Vraag een nieuwe aan.' 
+      });
+    }
+
+    if (user.verificationToken !== code) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Ongeldige verificatie code' 
+      });
+    }
+
+    if (new Date() > user.verificationTokenExp) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Verificatie code is verlopen. Vraag een nieuwe aan.' 
+      });
+    }
+
+    // Update user as verified and add bonus verification score
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        verificationToken: null,
+        verificationTokenExp: null,
+        verificationScore: user.verificationScore + 20 // +20 points for verified email
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      data: { 
+        message: 'E-mail succesvol geverifieerd! 🎉',
+        bonusPoints: 20
+      } 
+    });
+  } catch (error) {
+    console.error('Verify email error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
+  }
+});
+
+// POST /auth/resend-verification - Resend verification email
+router.post('/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'E-mailadres vereist' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
+    });
+
+    if (!user) {
+      // Don't reveal if email exists
+      return res.json({ 
+        success: true, 
+        data: { message: 'Als dit e-mailadres bestaat, ontvang je een verificatie email' } 
+      });
+    }
+
+    if (user.emailVerified) {
+      return res.json({ 
+        success: true, 
+        data: { message: 'E-mail is al geverifieerd' } 
+      });
+    }
+
+    // Generate new verification code
+    const verificationToken = generateVerificationCode();
+    const verificationTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { verificationToken, verificationTokenExp }
+    });
+
+    // Send verification email
+    const emailSent = await sendVerificationEmail(email.toLowerCase(), user.name, verificationToken);
+    
+    if (!emailSent) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Kon verificatie email niet verzenden. Probeer later opnieuw.' 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      data: { message: 'Verificatie email verzonden' } 
+    });
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    res.status(500).json({ success: false, error: 'Er ging iets mis' });
   }
 });
 
@@ -214,6 +363,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
         verificationScore: user.verificationScore,
         isPremium: user.isPremium,
         likesRemaining: user.likesRemaining,
+        emailVerified: user.emailVerified,
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString()
       }
@@ -246,7 +396,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     // Generate reset token (6 digit code for simplicity)
-    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetToken = generateVerificationCode();
     const resetTokenExp = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     await prisma.user.update({
@@ -254,9 +404,12 @@ router.post('/forgot-password', async (req, res) => {
       data: { resetToken, resetTokenExp }
     });
 
-    // In production, send email here
-    // For now, log the token (in production use SendGrid, Resend, etc.)
-    console.log(`[PASSWORD RESET] Email: ${email}, Code: ${resetToken}`);
+    // Send password reset email via Resend
+    const emailSent = await sendPasswordResetEmail(email.toLowerCase(), user.name, resetToken);
+    
+    if (!emailSent) {
+      console.warn('[AUTH] Failed to send password reset email to:', email);
+    }
 
     res.json({ 
       success: true, 

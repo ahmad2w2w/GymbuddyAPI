@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image, Alert, Keyboard } from 'react-native';
 import { Text, useTheme, Card, Avatar, TextInput, IconButton, ActivityIndicator, Divider, Menu, Portal, Modal, RadioButton, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -46,8 +46,26 @@ export default function ChatsScreen() {
   const [reportDetails, setReportDetails] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   
+  // Keyboard state
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Track keyboard visibility
+  useEffect(() => {
+    const keyboardDidShow = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+    });
+    const keyboardDidHide = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      keyboardDidShow.remove();
+      keyboardDidHide.remove();
+    };
+  }, []);
 
   const loadMatches = useCallback(async () => {
     try {
@@ -359,7 +377,7 @@ export default function ChatsScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.chatContainer}
-          keyboardVerticalOffset={90}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
           {loadingMessages && messages.length === 0 ? (
             <View style={styles.loadingContainer}>
@@ -401,7 +419,13 @@ export default function ChatsScreen() {
               </Text>
             </View>
           )}
-          <View style={[styles.inputContainer, { backgroundColor: theme.colors.surface }]}>
+          <View style={[
+            styles.inputContainer, 
+            { 
+              backgroundColor: theme.colors.surface,
+              paddingBottom: keyboardVisible ? 10 : 70,
+            }
+          ]}>
             <TextInput
               value={messageText}
               onChangeText={handleTextChange}
@@ -613,7 +637,7 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   inputContainer: {
-    padding: 12,
+    padding: 1,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.1)',
   },
